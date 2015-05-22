@@ -40,6 +40,7 @@
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <sys/ipc.h>
@@ -67,7 +68,6 @@ static unsigned int traceInit() {
 		if(errno == ENOENT){
 			g_trace_handle_fd = TRACE_FILE_NOT_EXIST;
 		} 
-		set_last_result(TRACE_ERROR_IO_ERROR);
 		return 0;
 	} 
 	if(cur_enabled_tag ==  NULL) {

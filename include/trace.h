@@ -23,8 +23,6 @@
 #ifndef _CDBG_TIZEN_TRACE_H_
 #define _CDBG_TIZEN_TRACE_H_
 
-#include <tizen.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
@@ -34,15 +32,6 @@ extern "C" {
  * @{
  *
  */
-
-/**
-* @brief Enumeration for Trace Error.
-* @since_tizen 2.4
-*/
-typedef enum {
-	TRACE_ERROR_NONE = TIZEN_ERROR_NONE,	/**< Successful */
-	TRACE_ERROR_IO_ERROR = TIZEN_ERROR_IO_ERROR	/**< I/O error */
-} trace_error_e;
 
 /**
  * @brief Writes a trace event to indicate that a synchronous event has begun.
