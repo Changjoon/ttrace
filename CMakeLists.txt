@@ -1,0 +1,76 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
+PROJECT(ttrace C CXX)
+
+SET(PREFIX ${CMAKE_INSTALL_PREFIX})
+SET(EXEC_PREFIX "\${prefix}")
+SET(LIBDIR "\${prefix}/lib")
+SET(INCLUDEDIR "\${prefix}/include")
+SET(VERSION_MAJOR 1)
+SET(VERSION "${VERSION_MAJOR}.1")
+
+INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include)
+
+ADD_DEFINITIONS("-DPREFIX=\"${PREFIX}\"")
+
+# compiler flags
+SET(EXTRA_CFLAGS "${EXTRA_CFLAGS}")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
+SET(EXTRA_CXXFLAGS "${EXTRA_CXXFLAGS}")
+
+SET(CMAKE_SKIP_BUILD_RPATH TRUE)
+
+#################################################################
+# Build ttrace Library
+# ------------------------------
+SET(TTRACE "ttrace")
+SET(SRCS_ttrace src/ttrace.c
+		src/TTraceWrapper.cpp)
+SET(HEADERS_ttrace ttrace.h
+                   TTraceWrapper.h
+                   trace.h)
+
+INCLUDE(FindPkgConfig)
+pkg_check_modules(pkg_ttrace REQUIRED dlog)
+FOREACH(flag ${pkg_ttrace_CFLAGS})
+	SET(EXTRA_CFLAGS_common "${EXTRA_CFLAGS_common} ${flag}")
+ENDFOREACH(flag)
+
+ADD_LIBRARY(${TTRACE} SHARED ${SRCS_ttrace})
+SET_TARGET_PROPERTIES(${TTRACE} PROPERTIES SOVERSION ${VERSION_MAJOR})
+SET_TARGET_PROPERTIES(${TTRACE} PROPERTIES VERSION ${VERSION})
+SET_TARGET_PROPERTIES(${TTRACE} PROPERTIES COMPILE_FLAGS ${EXTRA_CFLAGS_common})
+TARGET_LINK_LIBRARIES(${TTRACE} ${pkg_ttrace_LDFLAGS} "-ldl")
+
+CONFIGURE_FILE(${TTRACE}.pc.in ${TTRACE}.pc @ONLY)
+
+INSTALL(TARGETS ${TTRACE} DESTINATION lib COMPONENT RuntimeLibraries)
+INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/${TTRACE}.pc DESTINATION lib/pkgconfig)
+FOREACH(hfile ${HEADERS_ttrace})
+	INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/${hfile} DESTINATION include)
+ENDFOREACH(hfile)
+
+#################################################################
+# Build atrace Library (KK)
+# ------------------------------
+SET(ATRACE "atrace")
+SET(SRCS_atrace src/atrace/atrace.cpp)
+SET(HEADERS_atrace src/ttrace/ttrace.h)
+
+INCLUDE(FindPkgConfig)
+pkg_check_modules(pkg_atrace REQUIRED zlib)
+FOREACH(flag ${pkg_atrace_CXXFLAGS})
+	SET(EXTRA_CXXFLAGS_common "${EXTRA_CXXFLAGS_common} ${flag}")
+ENDFOREACH(flag)
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${EXTRA_CXXFLAGS} ${EXTRA_CXXFLAGS_common}")
+MESSAGE("CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+
+ADD_EXECUTABLE(${ATRACE} ${SRCS_atrace})
+SET_TARGET_PROPERTIES(${ATRACE} PROPERTIES SOVERSION ${VERSION_MAJOR})
+SET_TARGET_PROPERTIES(${ATRACE} PROPERTIES VERSION ${VERSION})
+#SET_TARGET_PROPERTIES(${ATRACE} PROPERTIES COMPILE_FLAGS ${EXTRA_CFLAGS_common})
+TARGET_LINK_LIBRARIES(${ATRACE} ${pkg_atrace_LDFLAGS} "-ldl")
+
+CONFIGURE_FILE(${ATRACE}.pc.in ${ATRACE}.pc @ONLY)
+
+INSTALL(TARGETS ${ATRACE} DESTINATION bin)
+INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/${ATRACE}.pc DESTINATION lib/pkgconfig)

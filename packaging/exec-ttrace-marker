@@ -1,0 +1,70 @@
+#!/bin/bash
+
+conf="/etc/ttrace.conf"
+change_permission="--update"
+
+chmod 0222 /sys/kernel/debug/tracing/trace_marker
+attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/trace_marker
+
+chown root:developer /sys/kernel/debug/tracing/trace_clock
+chown root:developer /sys/kernel/debug/tracing/buffer_size_kb
+chown root:developer /sys/kernel/debug/tracing/options/overwrite
+chown root:developer /sys/kernel/debug/tracing/options/print-tgid
+chown root:developer /sys/kernel/debug/tracing/events/sched/sched_switch/enable
+chown root:developer /sys/kernel/debug/tracing/events/sched/sched_wakeup/enable
+chown root:developer /sys/kernel/debug/tracing/events/power/cpu_frequency/enable
+chown root:developer /sys/kernel/debug/tracing/events/power/clock_set_rate/enable
+#chown root:developer /sys/kernel/debug/tracing/events/cpufreq_interactive/enable
+chown root:developer /sys/kernel/debug/tracing/tracing_on
+chown root:developer /sys/kernel/debug/tracing/trace
+chown root:developer /usr/bin/atrace
+
+chmod 0664 /sys/kernel/debug/tracing/trace_clock
+chmod 0664 /sys/kernel/debug/tracing/buffer_size_kb
+chmod 0664 /sys/kernel/debug/tracing/options/overwrite
+chmod 0664 /sys/kernel/debug/tracing/options/print-tgid
+chmod 0664 /sys/kernel/debug/tracing/events/sched/sched_switch/enable
+chmod 0664 /sys/kernel/debug/tracing/events/sched/sched_wakeup/enable
+chmod 0664 /sys/kernel/debug/tracing/events/power/cpu_frequency/enable
+chmod 0664 /sys/kernel/debug/tracing/events/power/clock_set_rate/enable
+#chmod 0664 /sys/kernel/debug/tracing/events/cpufreq_interactive/enable
+chmod 0664 /sys/kernel/debug/tracing/tracing_on
+chmod 0660 /sys/kernel/debug/tracing/trace
+chmod 0755 /sys/kernel/debug
+chmod 0755 /usr/bin/atrace
+
+attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/trace_clock
+attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/buffer_size_kb
+attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/options/overwrite
+attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/options/print-tgid
+attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/events/sched/sched_switch/enable
+attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/events/sched/sched_wakeup/enable
+attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/events/power/cpu_frequency/enable
+attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/events/power/clock_set_rate/enable
+#attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/events/cpufreq_interactive/enable
+attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/tracing_on
+attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/trace
+attr -S -s SMACK64 -V '*' /usr/bin/atrace
+
+if [ -e "$conf" ]
+then
+	echo "$conf was found!!!"
+
+	while read line
+	do
+		options=$line
+		echo "File name is - $conf"
+		echo "Options is - $options"
+	done < "$conf"
+
+	change-booting-mode.sh "$change_permission"
+	$options > "/tmp/trace"
+	rm "$conf"
+else
+	echo "$conf was NOT found!!!"
+	atrace
+	echo 0 > "/sys/kernel/debug/tracing/trace"
+	echo 0 > "/sys/kernel/debug/tracing/tracing_on"
+fi
+
+exit 0

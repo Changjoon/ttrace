@@ -1,0 +1,11 @@
+[Unit]
+Description=T-trace marker
+DefaultDependencies=no
+After=sys-kernel-debug.mount
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/exec-ttrace-marker
+
+[Install]
+WantedBy=sys-kernel-debug.mount
