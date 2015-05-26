@@ -28,7 +28,7 @@ T-trace library devel
 %build
 export CFLAGS="$CFLAGS -g -Wall -std=gnu99"
 export CXXFLAGS="$CXXFLAGS -std=c++0x -fPIE -pie"
-cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} .
+cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix} -DBUILD_PKGTYPE=rpm -DLIBDIR=%{_libdir} -DINCLUDEDIR=%{_includedir}
 make %{?jobs:-j%jobs}
 
 %install
