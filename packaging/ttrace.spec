@@ -9,6 +9,7 @@ SOURCE101:	packaging/exec-ttrace-marker
 SOURCE102:	packaging/ttrace-marker.service
 BuildRequires: pkgconfig(dlog)
 BuildRequires: pkgconfig(zlib)
+BuildRequires: pkgconfig(capi-base-common)
 BuildRequires: cmake
 
 %description

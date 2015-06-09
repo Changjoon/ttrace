@@ -28,7 +28,7 @@ SET(HEADERS_ttrace ttrace.h
                    trace.h)
 
 INCLUDE(FindPkgConfig)
-pkg_check_modules(pkg_ttrace REQUIRED dlog)
+pkg_check_modules(pkg_ttrace REQUIRED dlog capi-base-common)	
 FOREACH(flag ${pkg_ttrace_CFLAGS})
 	SET(EXTRA_CFLAGS_common "${EXTRA_CFLAGS_common} ${flag}")
 ENDFOREACH(flag)
