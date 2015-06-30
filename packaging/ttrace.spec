@@ -7,6 +7,8 @@ License:    Apache-2.0
 Source0:    %{name}-%{version}.tar.gz
 SOURCE101:	packaging/exec-ttrace-marker
 SOURCE102:	packaging/ttrace-marker.service
+SOURCE103:	packaging/ttrace_tag
+
 BuildRequires: pkgconfig(dlog)
 BuildRequires: pkgconfig(zlib)
 BuildRequires: pkgconfig(capi-base-common)
@@ -43,6 +45,8 @@ mkdir -p %{buildroot}/usr/share/license
 cp LICENSE %{buildroot}/usr/share/license/%{name}
 mkdir -p %{buildroot}/etc/systemd/system/sys-kernel-debug.mount.wants/
 ln -s %{_libdir}/systemd/system/ttrace-marker.service %{buildroot}/etc/systemd/system/sys-kernel-debug.mount.wants/ttrace-marker.service
+mkdir -p %{buildroot}/etc/ttrace
+cp %{SOURCE103} %{buildroot}/etc/ttrace
 
 %post -p /sbin/ldconfig
 
@@ -57,6 +61,7 @@ ln -s %{_libdir}/systemd/system/ttrace-marker.service %{buildroot}/etc/systemd/s
 %attr(755,root,root) %{_bindir}/atrace
 %attr(755,root,root) %{_bindir}/atrace-1.1
 %attr(755,root,root) %{_bindir}/exec-ttrace-marker
+%attr(664,root,root) /etc/ttrace/ttrace_tag
 /etc/systemd/system/sys-kernel-debug.mount.wants/ttrace-marker.service
 /usr/share/license/%{name}
 

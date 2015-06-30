@@ -25,7 +25,6 @@ extern "C" {
 /* Define TTRACE_TAG */
 #define TTRACE_TAG_NEVER               0       // This tag is never enabled.
 #define TTRACE_TAG_ALWAYS              (1<<0)  // This tag is always enabled.
-#define TTRACE_TAG_APP                 TTRACE_TAG_ALWAYS  
 #define TTRACE_TAG_GRAPHICS            (1<<1)
 #define TTRACE_TAG_INPUT               (1<<2)
 #define TTRACE_TAG_VIEW                (1<<3)
@@ -40,8 +39,10 @@ extern "C" {
 #define TTRACE_TAG_MEDIA_CONTENT       (1<<12)
 #define TTRACE_TAG_MEDIA_DB            (1<<13)
 #define TTRACE_TAG_SCREEN_MIRRORING    (1<<14)
-#define TTRACE_TAG_LAST                TTRACE_TAG_SCREEN_MIRRORING
+#define TTRACE_TAG_APP                 (1<<15)
+#define TTRACE_TAG_LAST                TTRACE_TAG_APP
 
+#define ENABLED_TAG_FILE "/etc/ttrace/ttrace_tag"
 void traceBegin(int tag, const char *name, ...);
 void traceEnd(int tag);
 void traceAsyncBegin(int tag, int cookie, const char *name, ...);

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-conf="/etc/ttrace.conf"
+conf="/etc/ttrace/ttrace.conf"
 change_permission="--update"
 
 chmod 0222 /sys/kernel/debug/tracing/trace_marker
@@ -44,7 +44,6 @@ attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/events/power/clock_set_rate/
 #attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/events/cpufreq_interactive/enable
 attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/tracing_on
 attr -S -s SMACK64 -V '*' /sys/kernel/debug/tracing/trace
-attr -S -s SMACK64 -V '*' /usr/bin/atrace
 
 if [ -e "$conf" ]
 then
@@ -62,7 +61,7 @@ then
 	rm "$conf"
 else
 	echo "$conf was NOT found!!!"
-	atrace
+	atrace --init_exec
 	echo 0 > "/sys/kernel/debug/tracing/trace"
 	echo 0 > "/sys/kernel/debug/tracing/tracing_on"
 fi

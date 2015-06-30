@@ -2,26 +2,14 @@
 	<define>
 		<domain name="ttrace" policy="restricted"/>
 		<request>
-			<smack request="ttrace" type="rw"/>
+			<smack request="sdbd" type="r" />
 		</request>
-		<permit>
-			<smack permit="sdbd" type="rx"/>
-			<smack permit="e17" type="rw"/>
-			<smack permit="cbhm" type="rw"/>
-			<smack permit="starter" type="rw"/>
-			<smack permit="ui-gadget::client" type="rw"/>
-			<smack permit="org.tizen.quickpanel" type="rw"/>
-			<smack permit="org.tizen.indicator" type="rw"/>
-			<smack permit="org.tizen.setting" type="rw"/>
-			<smack permit="org.tizen.camera-app" type="rw"/>
-			<smack permit="org.tizen.calendar" type="rw"/>
-			<smack permit="org.tizen.music-player" type="rw"/>
-			<smack permit="org.tizen.message" type="rw"/>
-			<smack permit="org.tizen.browser" type="rw"/>
-		</permit>
 	</define>
 	<assign>
-		<filesystem path="/usr/bin/atrace-1.1" label="ttrace" exec_label="ttrace"/>
+		<filesystem path="/usr/bin/atrace" label="_" exec_label="ttrace" />
+		<filesystem path="/usr/bin/atrace-1.1" label="_" exec_label="ttrace" />
+		<filesystem path="/etc/ttrace/ttrace_tag" label="*" exec_label="none" />
+		<filesystem path="/usr/bin/exec-ttrace-marker" label="_" exec_label="ttrace" />
 	</assign>
 	<request>
 		<domain name="_"/>

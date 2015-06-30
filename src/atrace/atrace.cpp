@@ -31,11 +31,11 @@
 #include <stdint.h>
 #include <strings.h>
 #include <string.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
+#include <sys/mman.h>
 #include "ttrace.h"
 #define TTRACE_TAG_NONE		9999
 #define TAG_NONE_IDX		0
+
 #else
 #include <binder/IBinder.h>
 #include <binder/IServiceManager.h>
@@ -52,14 +52,12 @@ using namespace android;
 
 enum { MAX_SYS_FILES = 8 };
 
-#ifdef DEVICE_TYPE_TIZEN
-static uint32_t *sm_for_enabled_tag = NULL;
-#else
 const char* k_traceTagsProperty = "debug.atrace.tags.enableflags";
 const char* k_traceAppCmdlineProperty = "debug.atrace.app_cmdlines";
-#endif
 
 typedef enum { OPT, REQ } requiredness  ;
+
+char str_error[256] = "";
 
 struct TracingCategory {
     // The name identifying the category.
@@ -86,21 +84,22 @@ struct TracingCategory {
 /* Tracing categories */
 static const TracingCategory k_categories[] = {
 #ifdef DEVICE_TYPE_TIZEN
-    { "none",       "None",                     TTRACE_TAG_NONE, { } }, //do not change "none" option's index
-    { "gfx",        "Graphics",        	 	TTRACE_TAG_GRAPHICS, { } },
-    { "input",      "Input",            	TTRACE_TAG_INPUT, { } },
-    { "view",       "View System",      	TTRACE_TAG_VIEW, { } },
-    { "web",	    "Web",        		TTRACE_TAG_WEB, { } },
-    { "wm",         "Window Manager",   	TTRACE_TAG_WINDOW_MANAGER, { } },
-    { "am",         "Application Manager",	TTRACE_TAG_APPLICATION_MANAGER, { } },
-    { "image",      "Image",            	TTRACE_TAG_IMAGE, { } },
-    { "audio",      "Audio",            	TTRACE_TAG_AUDIO, { } },
-    { "video",      "Video",            	TTRACE_TAG_VIDEO, { } },
-    { "camera",     "Camera",           	TTRACE_TAG_CAMERA, { } },
-    { "hal",        "Hardware Modules", 	TTRACE_TAG_HAL, { } },
-    { "mc",         "Multimedia content", 	TTRACE_TAG_MEDIA_CONTENT, { } },
-    { "mdb",        "Multimedia database", 	TTRACE_TAG_MEDIA_DB, { } },
-    { "scmirroring","Screen mirroring", 	TTRACE_TAG_SCREEN_MIRRORING, { } },
+    { "none",        "None",                TTRACE_TAG_NONE, { } }, //do not change "none" option's index
+    { "gfx",         "Graphics",            TTRACE_TAG_GRAPHICS, { } },
+    { "input",       "Input",               TTRACE_TAG_INPUT, { } },
+    { "view",        "View System",         TTRACE_TAG_VIEW, { } },
+    { "web",         "Web",                 TTRACE_TAG_WEB, { } },
+    { "wm",          "Window Manager",      TTRACE_TAG_WINDOW_MANAGER, { } },
+    { "am",          "Application Manager", TTRACE_TAG_APPLICATION_MANAGER, { } },
+    { "image",       "Image",               TTRACE_TAG_IMAGE, { } },
+    { "audio",       "Audio",               TTRACE_TAG_AUDIO, { } },
+    { "video",       "Video",               TTRACE_TAG_VIDEO, { } },
+    { "camera",      "Camera",              TTRACE_TAG_CAMERA, { } },
+    { "hal",         "Hardware Modules",    TTRACE_TAG_HAL, { } },
+    { "mc",          "Multimedia content",  TTRACE_TAG_MEDIA_CONTENT, { } },
+    { "mdb",         "Multimedia database", TTRACE_TAG_MEDIA_DB, { } },
+    { "scmirroring", "Screen mirroring",    TTRACE_TAG_SCREEN_MIRRORING, { } },
+    { "app",         "Application",         TTRACE_TAG_APP, { } },
 #else
     { "gfx",        "Graphics",         ATRACE_TAG_GRAPHICS, { } },
     { "input",      "Input",            ATRACE_TAG_INPUT, { } },
@@ -223,7 +222,7 @@ static bool truncateFile(const char* path)
     int traceFD = creat(path, 0);
     if (traceFD == -1) {
         fprintf(stderr, "error truncating %s: %s (%d)\n", path,
-            strerror(errno), errno);
+            strerror_r(errno, str_error, sizeof(str_error)), errno);
         return false;
     }
 
@@ -237,7 +236,7 @@ static bool _writeStr(const char* filename, const char* str, int flags)
     int fd = open(filename, flags);
     if (fd == -1) {
         fprintf(stderr, "error opening %s: %s (%d)\n", filename,
-                strerror(errno), errno);
+                strerror_r(errno, str_error, sizeof(str_error)), errno);
         return false;
     }
 
@@ -245,7 +244,7 @@ static bool _writeStr(const char* filename, const char* str, int flags)
     ssize_t len = strlen(str);
     if (write(fd, str, len) != len) {
         fprintf(stderr, "error writing to %s: %s (%d)\n", filename,
-                strerror(errno), errno);
+                strerror_r(errno, str_error, sizeof(str_error)), errno);
         ok = false;
     }
 
@@ -403,30 +402,25 @@ static bool pokeBinderServices()
 static bool setTagsProperty(uint64_t tags)
 {
 #ifdef DEVICE_TYPE_TIZEN
-	int shmid;
-    int skey = 1106;
-	void *shm_val = (void *) 0;
-	
-	if (sm_for_enabled_tag == NULL) {
-		if(-1 == (shmid = shmget((key_t)skey, sizeof(int), 0666|IPC_CREAT)))
-		{
-			fprintf(stderr, "error: shmget() failed\n");
-			return false;
-		}
-		if((void *)-1 == (shm_val = (void *) shmat(shmid, (void *)0, 0)))
-		{
-			fprintf(stderr, "error: shmat() failed\n");
-			return false;
-		}
-		sm_for_enabled_tag = (uint32_t *)shm_val;
+	uint64_t *sm_for_enabled_tag = NULL;
+	int fd = -1;
+	fd = open(ENABLED_TAG_FILE, O_RDWR | O_CLOEXEC, 0666);		
+
+	if(fd < 0){
+		fprintf(stderr, "Fail to open enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
+		return false;
 	}
-	
-	if(tags){
-		*sm_for_enabled_tag = (uint32_t)tags;
-		fprintf(stderr, "Enabled TAGs: %u\n", (uint32_t)*sm_for_enabled_tag); /* just for debugging */
-	} else {
-		*sm_for_enabled_tag = (uint32_t)0;
+	sm_for_enabled_tag = (uint64_t*)mmap(NULL, sizeof(uint64_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+	if(sm_for_enabled_tag == MAP_FAILED) {
+		fprintf(stderr, "error: mmap() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
+		return false;
 	}
+	*sm_for_enabled_tag = tags;
+	fprintf(stderr, "Enabled TAGs: %u\n", (uint32_t)*sm_for_enabled_tag);
+
+	munmap(sm_for_enabled_tag, sizeof(uint64_t));
+	close(fd);
 #else
     char buf[64];
     snprintf(buf, 64, "%#llx", tags);
@@ -474,7 +468,7 @@ static bool verifyKernelTraceFuncs(const char* funcs)
     int fd = open(k_ftraceFilterPath, O_RDONLY);
     if (fd == -1) {
         fprintf(stderr, "error opening %s: %s (%d)\n", k_ftraceFilterPath,
-            strerror(errno), errno);
+            strerror_r(errno, str_error, sizeof(str_error)), errno);
         return false;
     }
 
@@ -483,7 +477,7 @@ static bool verifyKernelTraceFuncs(const char* funcs)
     close(fd);
     if (n == -1) {
         fprintf(stderr, "error reading %s: %s (%d)\n", k_ftraceFilterPath,
-            strerror(errno), errno);
+            strerror_r(errno, str_error, sizeof(str_error)), errno);
         return false;
     }
 
@@ -649,7 +643,7 @@ static void dumpTrace()
     int traceFD = open(k_tracePath, O_RDWR);
     if (traceFD == -1) {
         fprintf(stderr, "error opening %s: %s (%d)\n", k_tracePath,
-                strerror(errno), errno);
+                strerror_r(errno, str_error, sizeof(str_error)), errno);
         return;
     }
 
@@ -690,7 +684,7 @@ static void dumpTrace()
                 result = read(traceFD, in, bufSize);
                 if (result < 0) {
                     fprintf(stderr, "error reading trace: %s (%d)\n",
-                            strerror(errno), errno);
+                            strerror_r(errno, str_error, sizeof(str_error)), errno);
                     result = Z_STREAM_END;
                     break;
                 } else if (result == 0) {
@@ -706,7 +700,7 @@ static void dumpTrace()
                 result = write(STDOUT_FILENO, out, bufSize);
                 if ((size_t)result < bufSize) {
                     fprintf(stderr, "error writing deflated trace: %s (%d)\n",
-                            strerror(errno), errno);
+                            strerror_r(errno, str_error, sizeof(str_error)), errno);
                     result = Z_STREAM_END; // skip deflate error message
                     zs.avail_out = bufSize; // skip the final write
                     break;
@@ -726,7 +720,7 @@ static void dumpTrace()
             result = write(STDOUT_FILENO, out, bytes);
             if ((size_t)result < bytes) {
                 fprintf(stderr, "error writing deflated trace: %s (%d)\n",
-                        strerror(errno), errno);
+                        strerror_r(errno, str_error, sizeof(str_error)), errno);
             }
         }
 
@@ -741,7 +735,7 @@ static void dumpTrace()
 		ssize_t sent = 0;
 		while ((sent = sendfile(STDOUT_FILENO, traceFD, NULL, 64*1024*1024)) > 0);
 		if (sent == -1) {
-			fprintf(stderr, "error dumping trace: %s (%d)\n", strerror(errno),
+			fprintf(stderr, "error dumping trace: %s (%d)\n", strerror_r(errno, str_error, sizeof(str_error)),
 					errno);
 		}
     }
@@ -850,6 +844,9 @@ int main(int argc, char **argv)
             {"async_stop",      no_argument, 0,  0 },
             {"async_dump",      no_argument, 0,  0 },
             {"list_categories", no_argument, 0,  0 },
+#ifdef DEVICE_TYPE_TIZEN
+            {"init_exec",		no_argument, 0,  0 },
+#endif
             {           0,                0, 0,  0 }
         };
 #ifndef DEVICE_TYPE_TIZEN
@@ -924,7 +921,11 @@ int main(int argc, char **argv)
                 } else if (!strcmp(long_options[option_index].name, "list_categories")) {
                     listSupportedCategories();
                     exit(0);
-                }
+                } else if (!strcmp(long_options[option_index].name, "init_exec")) {
+					fprintf(stderr, "init_exec\n");
+					setTagsProperty(0);
+					exit(0);
+				}
 #endif
             break;
 
@@ -943,7 +944,8 @@ int main(int argc, char **argv)
     }
 
     bool ok = true;
-    ok &= setUpTrace();
+    if (!(async && !g_traceOverwrite))
+	    ok &= setUpTrace();
     ok &= startTrace();
 
     if (ok && traceStart) {
