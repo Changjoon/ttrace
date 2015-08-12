@@ -36,17 +36,18 @@ make %{?jobs:-j%jobs}
 
 %install
 rm -rf %{buildroot}
+
 %make_install
-install -d %{buildroot}%{_libdir}/systemd/system/ttrace-marker.service.wants
-install -m0644 %{SOURCE102} %{buildroot}%{_libdir}/systemd/system/
+install -d %{buildroot}%{_unitdir}/ttrace-marker.service.wants
+install -m0644 %{SOURCE102} %{buildroot}%{_unitdir}
 mkdir -p %{buildroot}%{_bindir}
 cp %{SOURCE101} %{buildroot}%{_bindir}
 mkdir -p %{buildroot}/usr/share/license
 cp LICENSE %{buildroot}/usr/share/license/%{name}
-mkdir -p %{buildroot}/etc/systemd/system/sys-kernel-debug.mount.wants/
-ln -s %{_libdir}/systemd/system/ttrace-marker.service %{buildroot}/etc/systemd/system/sys-kernel-debug.mount.wants/ttrace-marker.service
 mkdir -p %{buildroot}/etc/ttrace
 cp %{SOURCE103} %{buildroot}/etc/ttrace
+
+%install_service sys-kernel-debug.mount.wants ttrace-marker.service
 
 %post -p /sbin/ldconfig
 
@@ -56,13 +57,13 @@ cp %{SOURCE103} %{buildroot}/etc/ttrace
 %manifest ttrace.manifest
 %defattr(-,root,root,-)
 %{_libdir}/libttrace.so.*
-%{_libdir}/systemd/system/ttrace-marker.service
-%{_libdir}/systemd/system/ttrace-marker.service.wants/
+%{_unitdir}/ttrace-marker.service
+%{_unitdir}/ttrace-marker.service.wants/
 %attr(755,root,root) %{_bindir}/atrace
 %attr(755,root,root) %{_bindir}/atrace-1.1
 %attr(755,root,root) %{_bindir}/exec-ttrace-marker
 %attr(664,root,root) /etc/ttrace/ttrace_tag
-/etc/systemd/system/sys-kernel-debug.mount.wants/ttrace-marker.service
+%{_unitdir}/sys-kernel-debug.mount.wants/ttrace-marker.service
 /usr/share/license/%{name}
 
 %files devel
