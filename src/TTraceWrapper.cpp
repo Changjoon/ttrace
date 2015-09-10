@@ -18,7 +18,7 @@
 #include "TTraceWrapper.h"
 #include <stdio.h>
 
-TTraceWrapper::TTraceWrapper(int tags, const char* label, ...) {
+TTraceWrapper::TTraceWrapper(uint64_t tags, const char* label, ...) {
 	va_list ap;
 	char fmtd_label[MAX_LEN];
 

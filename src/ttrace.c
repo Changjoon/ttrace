@@ -22,10 +22,10 @@
  *
  * =============================================================================
  */
-#include "dlog.h"
 #include "ttrace.h"
 #include "trace.h"
-#include "stdint.h"
+#include "dlog.h"
+
 #define ENABLE_TTRACE
 
 #ifdef ENABLE_TTRACE
@@ -114,7 +114,7 @@ static inline uint64_t isTagEnabled(uint64_t cur_tag)
  * - tag: the tracing tag
  * - name: the event name
  */
-inline void traceBegin(int tag, const char *name, ...)
+void traceBegin(uint64_t tag, const char *name, ...)
 {
 	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN];
@@ -136,7 +136,7 @@ inline void traceBegin(int tag, const char *name, ...)
 
 }
 
-inline void traceEnd(int tag)
+void traceEnd(uint64_t tag)
 {
 	if (isTagEnabled(tag)) {
 		char end = 'E';
@@ -157,7 +157,7 @@ inline void traceEnd(int tag)
  * - cookie: an unique identifier for distinguishing simultaneous events.
  * The name and cookie used to begin an event must be used to end it.
  */
-inline void traceAsyncBegin(int tag, int cookie, const char *name, ...)
+void traceAsyncBegin(uint64_t tag, int cookie, const char *name, ...)
 {
 	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN];
@@ -179,7 +179,7 @@ inline void traceAsyncBegin(int tag, int cookie, const char *name, ...)
 #endif
 }
 
-inline void traceAsyncEnd(int tag, int cookie, const char *name, ...)
+void traceAsyncEnd(uint64_t tag, int cookie, const char *name, ...)
 {
 	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN];
@@ -191,6 +191,7 @@ inline void traceAsyncEnd(int tag, int cookie, const char *name, ...)
 		len = snprintf(buf, MAX_LEN, "F|%d|", getpid());
 		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
 		len += snprintf(buf + len, MAX_LEN - len, "|%d", cookie);
+		va_end(ap);
 		write(g_trace_handle_fd, buf, len);
 	}
 #ifdef TTRACE_DEBUG
@@ -206,7 +207,7 @@ inline void traceAsyncEnd(int tag, int cookie, const char *name, ...)
  * - name: the event name
  */
 /* LCOV_EXCL_START */
-inline void traceMark(int tag, const char *name, ...)
+void traceMark(uint64_t tag, const char *name, ...)
 {
 	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN], end = 'E';
@@ -235,7 +236,7 @@ inline void traceMark(int tag, const char *name, ...)
  * - name: the event name
  * - value: the value tracing
  */
-inline void traceCounter(int tag, int value, const char *name, ...)
+void traceCounter(uint64_t tag, int value, const char *name, ...)
 {
 	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN];
@@ -247,6 +248,7 @@ inline void traceCounter(int tag, int value, const char *name, ...)
 		len = snprintf(buf, MAX_LEN, "C|%d|", getpid());
 		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
 		len += snprintf(buf + len, MAX_LEN - len, "|%d", value);
+		va_end(ap);
 		write(g_trace_handle_fd, buf, len);
 	}
 #ifdef TTRACE_DEBUG
@@ -256,96 +258,22 @@ inline void traceCounter(int tag, int value, const char *name, ...)
 #endif
 }
 
-/*
- * Tracing API for Native Application
- * - tag: the tracing tag
- * - name: the event name
- * - value: the value tracing
- */
-inline void trace_begin(const char *name, ...)
-{
-	va_list ap;
-	char v_name[MAX_LEN];
-
-	va_start(ap, name);
-	vsnprintf(v_name, MAX_LEN, name, ap);
-
-	traceBegin(TTRACE_TAG_APP, v_name);
-	va_end(ap);
-}
-
-inline void trace_end()
-{
-	traceEnd(TTRACE_TAG_APP);
-}
-
-inline void trace_async_begin(int cookie, const char *name, ...)
-{
-	va_list ap;
-	char v_name[MAX_LEN];
-
-	va_start(ap, name);
-	vsnprintf(v_name, MAX_LEN, name, ap);
-
-	traceAsyncBegin(TTRACE_TAG_APP, cookie, v_name);
-	va_end(ap);
-}
-
-inline void trace_async_end(int cookie, const char *name, ...)
-{
-	va_list ap;
-	char v_name[MAX_LEN];
-
-	va_start(ap, name);
-	vsnprintf(v_name, MAX_LEN, name, ap);
-
-	traceAsyncEnd(TTRACE_TAG_APP, cookie, v_name);
-	va_end(ap);
-}
-
-inline void trace_update_counter(int value, const char *name, ...)
-{
-	va_list ap;
-	char v_name[MAX_LEN];
-
-	va_start(ap, name);
-	vsnprintf(v_name, MAX_LEN, name, ap);
-
-	traceCounter(TTRACE_TAG_APP, value, v_name);
-	va_end(ap);
-}
 #else
-inline void traceBegin(int tag, const char *name, ...)
+void traceBegin(uint64_t tag, const char *name, ...)
 {; }
 
-inline void traceEnd(int tag)
+void traceEnd(uint64_t tag)
 {; }
 
-inline void traceAsyncBegin(int tag, int cookie, const char *name, ...)
+void traceAsyncBegin(uint64_t tag, int cookie, const char *name, ...)
 {; }
 
-inline void traceAsyncEnd(int tag, int cookie, const char *name, ...)
+void traceAsyncEnd(uint64_t tag, int cookie, const char *name, ...)
 {; }
 
-inline void traceMark(int tag, const char *name, ...)
+void traceMark(uint64_t tag, const char *name, ...)
 {; }
 
-inline void traceCounter(int tag, int value, const char *name, ...)
-{; }
-
-inline void trace_begin(const char *name, ...)
-{; }
-
-inline void trace_end()
-{; }
-
-inline void trace_async_begin(int cookie, const char *name, ...)
-{; }
-
-inline void trace_async_end(int cookie, const char *name, ...)
-{; }
-
-inline void trace_update_counter(int value, const char *name, ...)
+void traceCounter(uint64_t tag, int value, const char *name, ...)
 {; }
 #endif
-

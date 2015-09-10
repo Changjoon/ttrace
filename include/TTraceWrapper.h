@@ -22,11 +22,13 @@
 
 #include <ttrace.h>
 #include <stdarg.h>
+#include <stdint.h>
+
 class TTraceWrapper {
 	private:
-		int tag;
+		uint64_t tag;
 	public:
-		TTraceWrapper(int tags, const char* label, ...);
+		TTraceWrapper(uint64_t tags, const char* label, ...);
 		~TTraceWrapper();
 };
 

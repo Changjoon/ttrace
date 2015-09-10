@@ -36,6 +36,7 @@
 #define TTRACE_TAG_NONE		9999
 #define TAG_NONE_IDX		0
 
+#define BACKUP_TRACE	"/tmp/trace.backup"
 #else
 #include <binder/IBinder.h>
 #include <binder/IServiceManager.h>
@@ -100,7 +101,7 @@ static const TracingCategory k_categories[] = {
     { "mdb",         "Multimedia database", TTRACE_TAG_MEDIA_DB, { } },
     { "scmirroring", "Screen mirroring",    TTRACE_TAG_SCREEN_MIRRORING, { } },
     { "app",         "Application",         TTRACE_TAG_APP, { } },
-#else
+#else		// Android tags
     { "gfx",        "Graphics",         ATRACE_TAG_GRAPHICS, { } },
     { "input",      "Input",            ATRACE_TAG_INPUT, { } },
     { "view",       "View System",      ATRACE_TAG_VIEW, { } },
@@ -114,7 +115,7 @@ static const TracingCategory k_categories[] = {
     { "res",        "Resource Loading", ATRACE_TAG_RESOURCES, { } },
     { "dalvik",     "Dalvik VM",        ATRACE_TAG_DALVIK, { } },
     { "rs",         "RenderScript",     ATRACE_TAG_RS, { } },
-#endif
+#endif	// Linux kernel tags
     { "sched",      "CPU Scheduling",   0, {
         { REQ,      "/sys/kernel/debug/tracing/events/sched/sched_switch/enable" },
         { REQ,      "/sys/kernel/debug/tracing/events/sched/sched_wakeup/enable" },
@@ -147,6 +148,10 @@ static const TracingCategory k_categories[] = {
     { "workq",      "Kernel Workqueues", 0, {
         { REQ,      "/sys/kernel/debug/tracing/events/workqueue/enable" },
     } },
+#ifdef TTRACE_PROFILE_MOBILE
+#elif defined TTRACE_PROFILE_TV
+#elif defined TTRACE_PROFILE_WEARABLE
+#endif
 };
 
 /* Command line options */
@@ -162,6 +167,12 @@ static const char* g_debugAppCmdLine = "";
 /* Global state */
 static bool g_traceAborted = false;
 static bool g_categoryEnables[NELEM(k_categories)] = {};
+
+#ifdef DEVICE_TYPE_TIZEN
+static bool g_init_exec = false;
+static bool g_append_trace = false;
+static bool g_backup_trace = false;
+#endif
 
 /* Sys file paths */
 static const char* k_traceClockPath =
@@ -404,7 +415,7 @@ static bool setTagsProperty(uint64_t tags)
 #ifdef DEVICE_TYPE_TIZEN
 	uint64_t *sm_for_enabled_tag = NULL;
 	int fd = -1;
-	fd = open(ENABLED_TAG_FILE, O_RDWR | O_CLOEXEC, 0666);		
+	fd = open(ENABLED_TAG_FILE, O_CREAT | O_RDWR | O_CLOEXEC, 0666);		
 
 	if(fd < 0){
 		fprintf(stderr, "Fail to open enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
@@ -414,10 +425,22 @@ static bool setTagsProperty(uint64_t tags)
 
 	if(sm_for_enabled_tag == MAP_FAILED) {
 		fprintf(stderr, "error: mmap() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
+		close(fd);
 		return false;
 	}
+	if(g_init_exec) {
+	        if (ftruncate(fd, sizeof(uint64_t)) < 0) {
+			    fprintf(stderr, "error: ftruncate() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
+			    munmap(sm_for_enabled_tag, sizeof(uint64_t));
+			    close(fd);
+			return false;
+		}
+		memset(sm_for_enabled_tag, 0, sizeof(uint64_t));
+	}
 	*sm_for_enabled_tag = tags;
-	fprintf(stderr, "Enabled TAGs: %u\n", (uint32_t)*sm_for_enabled_tag);
+	// For debug
+	// fprintf(stderr, "Enabled TAGs: %u\n", (uint32_t)*sm_for_enabled_tag);
+	//
 
 	munmap(sm_for_enabled_tag, sizeof(uint64_t));
 	close(fd);
@@ -510,6 +533,7 @@ static bool verifyKernelTraceFuncs(const char* funcs)
 static bool setKernelTraceFuncs(const char* funcs)
 {
     bool ok = true;
+    char *ptr[2];
 
     if (funcs == NULL || funcs[0] == '\0') {
         // Disable kernel function tracing.
@@ -530,10 +554,10 @@ static bool setKernelTraceFuncs(const char* funcs)
         // Set the requested filter functions.
         ok &= truncateFile(k_ftraceFilterPath);
         char* myFuncs = strdup(funcs);
-        char* func = strtok(myFuncs, ",");
+        char* func = strtok_r(myFuncs, ",", &ptr[0]);
         while (func) {
             ok &= appendStr(k_ftraceFilterPath, func);
-            func = strtok(NULL, ",");
+            func = strtok_r(NULL, ",", &ptr[1]);
         }
         free(myFuncs);
 
@@ -554,10 +578,19 @@ static bool setUpTrace()
 
     // Set up the tracing options.
     ok &= setTraceOverwriteEnable(g_traceOverwrite);
+#ifdef DEVICE_TYPE_TIZEN
+    if(!g_append_trace) {
+    	ok &= setTraceBufferSizeKB(g_traceBufferSizeKB);
+	ok &= setGlobalClockEnable(true);
+        ok &= setKernelTraceFuncs(g_kernelTraceFuncs);
+    }
+#else
     ok &= setTraceBufferSizeKB(g_traceBufferSizeKB);
     ok &= setGlobalClockEnable(true);
-    ok &= setPrintTgidEnableIfPresent(true);
     ok &= setKernelTraceFuncs(g_kernelTraceFuncs);
+#endif
+    ok &= setPrintTgidEnableIfPresent(true);
+
 
     // Set up the tags property.
     uint64_t tags = 0;
@@ -638,12 +671,36 @@ static void stopTrace()
 }
 
 // Read the current kernel trace and write it to stdout.
+#ifdef DEVICE_TYPE_TIZEN
+static void dumpTrace(bool startup)
+{	
+    int backup_fd = -1;
+    int traceFD = open(k_tracePath, O_RDWR);
+
+    if(startup) {
+	backup_fd = open(BACKUP_TRACE, O_CREAT|O_RDWR|O_TRUNC, 0666);
+
+    	if (backup_fd == -1) {
+        	fprintf(stderr, "error opening %s: %s (%d)\n", BACKUP_TRACE,
+        	strerror_r(errno, str_error, sizeof(str_error)), errno);
+        	if (traceFD > -1)
+        		close(traceFD);
+        	return;
+    	}
+    }
+
+#else
 static void dumpTrace()
 {
     int traceFD = open(k_tracePath, O_RDWR);
+#endif
     if (traceFD == -1) {
         fprintf(stderr, "error opening %s: %s (%d)\n", k_tracePath,
                 strerror_r(errno, str_error, sizeof(str_error)), errno);
+#ifdef DEVICE_TYPE_TIZEN
+        if (backup_fd > -1)
+   		close(backup_fd);
+#endif
         return;
     }
 
@@ -657,6 +714,10 @@ static void dumpTrace()
         if (result != Z_OK) {
             fprintf(stderr, "error initializing zlib: %d\n", result);
             close(traceFD);
+#ifdef DEVICE_TYPE_TIZEN
+            if (backup_fd > -1)
+		close(backup_fd);
+#endif
             return;
         }
 
@@ -670,6 +731,10 @@ static void dumpTrace()
 					if (out != NULL)
 							free(out);
         	close(traceFD);
+#ifdef DEVICE_TYPE_TIZEN
+        	if (backup_fd > -1)
+        			close(backup_fd);
+#endif
         	return;
 				}
         flush = Z_NO_FLUSH;
@@ -697,7 +762,12 @@ static void dumpTrace()
 
             if (zs.avail_out == 0) {
                 // Need to write the output.
+#ifdef DEVICE_TYPE_TIZEN
+		if(startup)	result = write(backup_fd, out, bufSize);
+		else 		result = write(STDOUT_FILENO, out, bufSize);
+#else
                 result = write(STDOUT_FILENO, out, bufSize);
+#endif
                 if ((size_t)result < bufSize) {
                     fprintf(stderr, "error writing deflated trace: %s (%d)\n",
                             strerror_r(errno, str_error, sizeof(str_error)), errno);
@@ -717,7 +787,12 @@ static void dumpTrace()
 
         if (zs.avail_out < bufSize) {
             size_t bytes = bufSize - zs.avail_out;
+#ifdef DEVICE_TYPE_TIZEN
+    	    if(startup)		result = write(backup_fd, out, bytes);
+	    else 		result = write(STDOUT_FILENO, out, bytes);
+#else
             result = write(STDOUT_FILENO, out, bytes);
+#endif
             if ((size_t)result < bytes) {
                 fprintf(stderr, "error writing deflated trace: %s (%d)\n",
                         strerror_r(errno, str_error, sizeof(str_error)), errno);
@@ -733,13 +808,24 @@ static void dumpTrace()
         free(out);
     } else {
 		ssize_t sent = 0;
+#ifdef DEVICE_TYPE_TIZEN 
+		if (startup) 
+			while ((sent = sendfile(backup_fd, traceFD, NULL, 64*1024*1024)) > 0);
+		else 
+			while ((sent = sendfile(STDOUT_FILENO, traceFD, NULL, 64*1024*1024)) > 0);
+#else
 		while ((sent = sendfile(STDOUT_FILENO, traceFD, NULL, 64*1024*1024)) > 0);
+#endif
 		if (sent == -1) {
 			fprintf(stderr, "error dumping trace: %s (%d)\n", strerror_r(errno, str_error, sizeof(str_error)),
 					errno);
 		}
     }
 
+#ifdef DEVICE_TYPE_TIZEN
+	if (backup_fd > -1)
+		close(backup_fd);
+#endif
     close(traceFD);
 }
 
@@ -819,6 +905,10 @@ static void showHelp(const char *cmd)
                     "  --async_dump    dump the current contents of circular trace buffer\n"
                     "  --async_stop    stop tracing and dump the current contents of circular\n"
                     "                    trace buffer\n"
+#ifdef DEVICE_TYPE_TIZEN
+                    "  --append        append traces to the existing traces. do not clear the trace buffer\n"
+		    "  --backup        back up the existing traces to /tmp/trace.backup and then clear the trace buffer\n"
+#endif
                     "  --list_categories\n"
                     "                  list the available tracing categories\n"
             );
@@ -845,12 +935,14 @@ int main(int argc, char **argv)
             {"async_dump",      no_argument, 0,  0 },
             {"list_categories", no_argument, 0,  0 },
 #ifdef DEVICE_TYPE_TIZEN
-            {"init_exec",		no_argument, 0,  0 },
+            {"init_exec",	no_argument, 0,  0 },
+            {"append",		no_argument, 0,  0 },
+            {"backup",    	no_argument, 0,  0 },
 #endif
             {           0,                0, 0,  0 }
         };
 #ifndef DEVICE_TYPE_TIZEN
-        ret = getopt_long(argc, argv, "a:b:ck:ns:t:z",
+        ret = getopt_long(argc, argv, "a:b:ck:ns:t:z:p",
                           long_options, &option_index);
 #else
 		ret = getopt_long(argc, argv, "b:ck:ns:t:z",
@@ -922,10 +1014,17 @@ int main(int argc, char **argv)
                     listSupportedCategories();
                     exit(0);
                 } else if (!strcmp(long_options[option_index].name, "init_exec")) {
-					fprintf(stderr, "init_exec\n");
-					setTagsProperty(0);
-					exit(0);
-				}
+                    fprintf(stderr, "init_exec\n");
+                    g_init_exec = true;
+                    setTagsProperty(0);
+                    exit(0);
+		} else if (!strcmp(long_options[option_index].name, "append")) {
+                    g_append_trace = true;
+		} else if (!strcmp(long_options[option_index].name, "backup")) {
+                    g_backup_trace = true;
+		}
+#else
+            case 0:
 #endif
             break;
 
@@ -944,12 +1043,22 @@ int main(int argc, char **argv)
     }
 
     bool ok = true;
-    if (!(async && !g_traceOverwrite))
+#ifdef DEVICE_TYPE_TIZEN
+    if(traceStart && g_backup_trace) {
+//before start tracing by atrace, backup existig traces
+	stopTrace();
+    	dumpTrace(true);
+    }
+#endif
+    if (!(async && !g_traceOverwrite)) {
 	    ok &= setUpTrace();
+    }
     ok &= startTrace();
 
     if (ok && traceStart) {
-        printf("capturing trace...");
+    		// For debug
+        // printf("capturing trace...");
+        //
         fflush(stdout);
 
         // We clear the trace after starting it because tracing gets enabled for
@@ -957,7 +1066,12 @@ int main(int argc, char **argv)
         // contain entries from only one CPU can cause "begin" entries without a
         // matching "end" entry to show up if a task gets migrated from one CPU to
         // another.
-        ok = clearTrace();
+	if(!g_append_trace) {
+		// For debug
+		// printf("\nclear the trace\n");
+		//
+	        ok = clearTrace();
+	}
 
         if (ok && !async) {
             // Sleep to allow the trace to be captured.
@@ -980,7 +1094,11 @@ int main(int argc, char **argv)
         if (!g_traceAborted) {
             printf(" done\nTRACE:\n");
             fflush(stdout);
+#ifdef DEVICE_TYPE_TIZEN
+	    dumpTrace(false);
+#else
             dumpTrace();
+#endif
         } else {
             printf("\ntrace aborted.\n");
             fflush(stdout);

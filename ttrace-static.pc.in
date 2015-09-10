@@ -1,0 +1,13 @@
+# Package Information for pkg-config
+
+prefix=@PREFIX@
+exec_prefix=@EXEC_PREFIX@
+libdir=@LIBDIR@
+includedir=@INCLUDEDIR@
+
+Name: ttrace static lib.
+Description: T-trace for tizen
+Version: @VERSION@
+Requires: dlog
+Libs: -L${libdir} libttrace.a
+Cflags: -I${includedir}

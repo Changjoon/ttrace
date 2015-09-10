@@ -9,6 +9,7 @@ SET(VERSION "${VERSION_MAJOR}.1")
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include)
 
 ADD_DEFINITIONS("-DPREFIX=\"${PREFIX}\"")
+
 # compiler flags
 SET(EXTRA_CFLAGS "${EXTRA_CFLAGS}")
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
@@ -16,8 +17,19 @@ SET(EXTRA_CXXFLAGS "${EXTRA_CXXFLAGS}")
 
 SET(CMAKE_SKIP_BUILD_RPATH TRUE)
 
+# Generate ttrace.h 
+SET(TTRACE_H_IN ttrace.h.in)
+IF("${TTRACE_PROFILE}" STREQUAL "tv")
+	SET(TTRACE_PROFILE_TV ON)
+ELSEIF("${TTRACE_PROFILE}" STREQUAL "wearable")
+	SET(TTRACE_PROFILE_WERABLE ON)
+ELSE()
+	SET(TTRACE_PROFILE_MOBILE ON)
+ENDIF()
+configure_file(${TTRACE_H_IN} "include/ttrace.h")
+
 #################################################################
-# Build ttrace Library
+# Build ttrace Library (Shared)
 # ------------------------------
 SET(TTRACE "ttrace")
 SET(SRCS_ttrace src/ttrace.c
@@ -27,12 +39,14 @@ SET(HEADERS_ttrace ttrace.h
                    trace.h)
 
 INCLUDE(FindPkgConfig)
-pkg_check_modules(pkg_ttrace REQUIRED dlog capi-base-common)	
+pkg_check_modules(pkg_ttrace REQUIRED dlog capi-base-common)
 FOREACH(flag ${pkg_ttrace_CFLAGS})
 	SET(EXTRA_CFLAGS_common "${EXTRA_CFLAGS_common} ${flag}")
 ENDFOREACH(flag)
 
-ADD_LIBRARY(${TTRACE} SHARED ${SRCS_ttrace})
+ADD_LIBRARY(${TTRACE} SHARED ${SRCS_ttrace}
+                             src/trace.c
+                             )
 SET_TARGET_PROPERTIES(${TTRACE} PROPERTIES SOVERSION ${VERSION_MAJOR})
 SET_TARGET_PROPERTIES(${TTRACE} PROPERTIES VERSION ${VERSION})
 SET_TARGET_PROPERTIES(${TTRACE} PROPERTIES COMPILE_FLAGS ${EXTRA_CFLAGS_common})
@@ -42,10 +56,25 @@ CONFIGURE_FILE(${TTRACE}.pc.in ${TTRACE}.pc @ONLY)
 
 INSTALL(TARGETS ${TTRACE} DESTINATION ${LIBDIR} COMPONENT RuntimeLibraries)
 INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/${TTRACE}.pc DESTINATION ${LIBDIR}/pkgconfig)
+
+#################################################################
+# Build ttrace Library (Static)
+# ------------------------------
+SET(TTRACE_STATIC "ttrace-static")
+
+ADD_LIBRARY(${TTRACE_STATIC} STATIC ${SRCS_ttrace})
+SET_TARGET_PROPERTIES(${TTRACE_STATIC} PROPERTIES COMPILE_FLAGS "${EXTRA_CFLAGS_common} -fpic")
+SET_TARGET_PROPERTIES(${TTRACE_STATIC} PROPERTIES OUTPUT_NAME ttrace)
+
+CONFIGURE_FILE(${TTRACE_STATIC}.pc.in ${TTRACE_STATIC}.pc @ONLY) 
+
+INSTALL(TARGETS ${TTRACE_STATIC} DESTINATION ${LIBDIR})
+INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/${TTRACE_STATIC}.pc DESTINATION ${LIBDIR}/pkgconfig)
+TARGET_LINK_LIBRARIES(${TTRACE_STATIC} ${pkg_ttrace_LDFLAGS} "-ldl")
+
 FOREACH(hfile ${HEADERS_ttrace})
 	INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/${hfile} DESTINATION ${INCLUDEDIR})
 ENDFOREACH(hfile)
-
 #################################################################
 # Build atrace Library (KK)
 # ------------------------------
