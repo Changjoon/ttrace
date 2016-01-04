@@ -50,9 +50,10 @@ extern "C" {
 #ifdef TTRACE_PROFILE_MOBILE
 //define TAGs belonging to mobile profile only
 #elif defined TTRACE_PROFILE_TV
-//define TAGs belonging to mobile profile only
+//define TAGs belonging to tv profile only
+#define TTRACE_TAG_SYSTEM              (1<<16)
 #elif defined TTRACE_PROFILE_WEARABLE
-//define TAGs belonging to mobile profile only
+//define TAGs belonging to wearable profile only
 #endif
 
 #define TTRACE_TAG_LAST                (1<<63)
