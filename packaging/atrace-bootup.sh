@@ -13,7 +13,7 @@ function HELP {
 CONF="/etc/ttrace.conf"
 
 SPACE=" "
-COMMAND="atrace --async_start --append"
+COMMAND="atrace --async_start"
 DEFTAGS=""
 
 NUMARGS=$#
