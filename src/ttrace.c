@@ -62,6 +62,7 @@ static uint64_t traceInit()
 {
 	uint64_t *sm_for_enabled_tag;
 
+	if(g_trace_handle_fd == FD_INITIAL_VALUE) {
 	g_trace_handle_fd = open(TRACE_FILE, O_WRONLY);
 	if (g_trace_handle_fd < 0) {
 		TTRACE_LOG("Fail to open trace file: %s(%d)", strerror(errno), errno);
@@ -71,6 +72,7 @@ static uint64_t traceInit()
 
 		set_last_result(TRACE_ERROR_IO_ERROR);
 		return 0;
+		}
 	}
 	if (cur_enabled_tag == ((void *)&dummy)) {
 		g_enabled_tag_fd = open(ENABLED_TAG_FILE, O_RDONLY | O_CLOEXEC);
@@ -98,7 +100,7 @@ static uint64_t traceInit()
 
 static inline uint64_t isTagEnabled(uint64_t cur_tag)
 {
-	if (g_trace_handle_fd == TRACE_FILE_NOT_EXIST || g_enabled_tag_fd == TRACE_FILE_NOT_EXIST)
+	if (g_trace_handle_fd == TRACE_FILE_NOT_EXIST)
 		return 0;
 	/* if no tag is enabled, trace all tags. */
 	cur_tag |= TTRACE_TAG_ALWAYS;

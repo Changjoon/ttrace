@@ -5,13 +5,13 @@ Release:    1
 Group:      System/Libraries
 License:    Apache-2.0
 Source0:    %{name}-%{version}.tar.gz
-SOURCE101:	packaging/exec-ttrace-marker
 SOURCE102:	packaging/ttrace-marker.service
 SOURCE103:	packaging/atrace-bootup.sh
 
 BuildRequires: pkgconfig(dlog)
 BuildRequires: pkgconfig(zlib)
 BuildRequires: pkgconfig(capi-base-common)
+BuildRequires: pkgconfig(libsmack)
 BuildRequires: cmake
 
 %define keepstatic 1
@@ -55,7 +55,6 @@ rm -rf %{buildroot}
 install -d %{buildroot}%{_unitdir}/ttrace-marker.service.wants
 install -m0644 %{SOURCE102} %{buildroot}%{_unitdir}
 mkdir -p %{buildroot}%{_bindir}
-cp %{SOURCE101} %{buildroot}%{_bindir}
 cp %{SOURCE103} %{buildroot}%{_bindir}
 mkdir -p %{buildroot}/usr/share/license
 cp LICENSE %{buildroot}/usr/share/license/%{name}
@@ -73,7 +72,6 @@ cp LICENSE %{buildroot}/usr/share/license/%{name}
 %{_unitdir}/ttrace-marker.service.wants/
 %attr(755,root,developer) %{_bindir}/atrace
 %attr(755,root,developer) %{_bindir}/atrace-1.1
-%attr(755,root,root) %{_bindir}/exec-ttrace-marker
 %{_unitdir}/sys-kernel-debug.mount.wants/ttrace-marker.service
 %attr(755,root,root) %{_bindir}/atrace-bootup.sh
 /usr/share/license/%{name}

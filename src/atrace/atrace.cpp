@@ -31,12 +31,18 @@
 #include <stdint.h>
 #include <strings.h>
 #include <string.h>
+#include <grp.h>
 #include <sys/mman.h>
+#include <sys/file.h>
+#include <sys/stat.h>
+#include <sys/smack.h>
+#include <unistd.h>
 #include "ttrace.h"
 #define TTRACE_TAG_NONE		9999
 #define TAG_NONE_IDX		0
 
 #define BACKUP_TRACE	"/tmp/trace.backup"
+#define BOOTUP_TRACE	"/etc/ttrace.conf"
 #else
 #include <binder/IBinder.h>
 #include <binder/IServiceManager.h>
@@ -59,6 +65,35 @@ const char* k_traceAppCmdlineProperty = "debug.atrace.app_cmdlines";
 typedef enum { OPT, REQ } requiredness  ;
 
 char str_error[256] = "";
+struct CommonNode {
+	const char* path;
+	const mode_t	perms;
+};
+static const CommonNode commonNodes[] = {
+	{	"/tmp/ttrace_tag",								0664	},
+	{	"/sys/kernel/debug",							0755	},
+	{	"/sys/kernel/debug/tracing/trace_marker",		0222	},
+	{	"/sys/kernel/debug/tracing/trace_clock",		0664	},
+	{	"/sys/kernel/debug/tracing/buffer_size_kb",		0664	},
+	{	"/sys/kernel/debug/tracing/current_tracer",		0664	},
+	{	"/sys/kernel/debug/tracing/tracing_on",			0664	},
+	{	"/sys/kernel/debug/tracing/trace",				0660	},
+	{	"/sys/kernel/debug/tracing/options/overwrite",	0664	},
+	{	"/sys/kernel/debug/tracing/options/print-tgid",	0664	},
+    {	"/sys/kernel/debug/tracing/events/sched/sched_switch/enable",	0664 },
+    {	"/sys/kernel/debug/tracing/events/sched/sched_wakeup/enable",	0664 },
+    {	"/sys/kernel/debug/tracing/events/power/cpu_frequency/enable",	0664 },
+    {	"/sys/kernel/debug/tracing/events/memory_bus/enable",			0664 },
+    {	"/sys/kernel/debug/tracing/events/power/cpu_idle/enable",		0664 },
+    {	"/sys/kernel/debug/tracing/events/ext4/ext4_sync_file_enter/enable",	0664	},
+    {	"/sys/kernel/debug/tracing/events/ext4/ext4_sync_file_exit/enable",		0664	},
+    {	"/sys/kernel/debug/tracing/events/block/block_rq_issue/enable",	0664 },
+    {	"/sys/kernel/debug/tracing/events/block/block_rq_complete/enable",	0664	},
+    {	"/sys/kernel/debug/tracing/events/mmc/enable",	0664 },
+    {	"/sys/kernel/debug/tracing/events/cpufreq_interactive/enable",	0664 },
+    {	"/sys/kernel/debug/tracing/events/sync/enable",	0664 },
+    {	"/sys/kernel/debug/tracing/events/workqueue/enable",	0664 },
+};
 
 struct TracingCategory {
     // The name identifying the category.
@@ -150,6 +185,7 @@ static const TracingCategory k_categories[] = {
     } },
 #ifdef TTRACE_PROFILE_MOBILE
 #elif defined TTRACE_PROFILE_TV
+    { "system",       "System",        	TTRACE_TAG_SYSTEM, { } },
 #elif defined TTRACE_PROFILE_WEARABLE
 #endif
 };
@@ -222,6 +258,32 @@ static bool fileExists(const char* filename) {
 // Check whether a file is writable.
 static bool fileIsWritable(const char* filename) {
     return access(filename, W_OK) != -1;
+}
+static bool initSysfsPermission() {
+	struct group group_dev;
+	struct group* group_ptr;
+	char buf[128];
+	if(0 != getgrnam_r("developer", &group_dev, buf, sizeof(buf), &group_ptr))
+		return false;
+	for (int i = 0 ; i < NELEM(commonNodes); i++) {
+		const CommonNode &node = commonNodes[i];
+		if (node.path != NULL) {
+			if (fileExists(node.path)) {
+				if (strcmp(node.path, "/sys/kernel/debug") == 0) {
+					chmod(node.path, node.perms);
+				}
+				else {
+					chown(node.path, 0, group_dev.gr_gid);
+					chmod(node.path, node.perms);
+					smack_setlabel(node.path, "*", SMACK_LABEL_ACCESS);
+				}
+			}
+		}
+		else {
+			return false;
+		}
+	}
+    return true;
 }
 
 // Truncate a file.
@@ -415,10 +477,16 @@ static bool setTagsProperty(uint64_t tags)
 #ifdef DEVICE_TYPE_TIZEN
 	uint64_t *sm_for_enabled_tag = NULL;
 	int fd = -1;
-	fd = open(ENABLED_TAG_FILE, O_CREAT | O_RDWR | O_CLOEXEC, 0666);		
+	if(g_init_exec) {
+		fd = open("/tmp/tmp_tag", O_CREAT | O_RDWR | O_CLOEXEC, 0666);		
 
 	if(fd < 0){
 		fprintf(stderr, "Fail to open enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
+			return false;
+		}
+		if (ftruncate(fd, sizeof(uint64_t)) < 0) {
+			fprintf(stderr, "error: ftruncate() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
+			close(fd);
 		return false;
 	}
 	sm_for_enabled_tag = (uint64_t*)mmap(NULL, sizeof(uint64_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -428,16 +496,43 @@ static bool setTagsProperty(uint64_t tags)
 		close(fd);
 		return false;
 	}
-	if(g_init_exec) {
-	        if (ftruncate(fd, sizeof(uint64_t)) < 0) {
-			    fprintf(stderr, "error: ftruncate() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
+
+		memset(sm_for_enabled_tag, 0, sizeof(uint64_t));
+		if(-1 == rename("/tmp/tmp_tag", ENABLED_TAG_FILE)) {
+			fprintf(stderr, "Fail to rename enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
+		}
+		if(false == initSysfsPermission()) {
+			fprintf(stderr, "Fail to init sysfs permisions: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
+		}
+		if(fileExists(BOOTUP_TRACE)) {
+			FILE *ifile = NULL;
+			char bootup_cmd[128];
+			ifile = fopen(BOOTUP_TRACE, "r");
+			if (ifile == NULL) {
 			    munmap(sm_for_enabled_tag, sizeof(uint64_t));
 			    close(fd);
 			return false;
 		}
-		memset(sm_for_enabled_tag, 0, sizeof(uint64_t));
+			fgets(bootup_cmd, sizeof(bootup_cmd), ifile);
+			fclose(ifile);
+			remove(BOOTUP_TRACE);
+			system(bootup_cmd);
+		}
 	}
+	else {
+		fd = open(ENABLED_TAG_FILE, O_RDWR | O_CLOEXEC, 0666);		
+		if(fd < 0){
+			fprintf(stderr, "Fail to open enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
+			return false;
+		}
+		sm_for_enabled_tag = (uint64_t*)mmap(NULL, sizeof(uint64_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+		if(sm_for_enabled_tag == MAP_FAILED) {
+			fprintf(stderr, "error: mmap() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
+			close(fd);
+			return false;
+		}
 	*sm_for_enabled_tag = tags;
+	}
 	// For debug
 	// fprintf(stderr, "Enabled TAGs: %u\n", (uint32_t)*sm_for_enabled_tag);
 	//
