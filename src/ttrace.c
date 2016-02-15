@@ -39,6 +39,7 @@
 #define TTRACE_LOG(format, arg...)
 #endif
 
+#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -62,27 +63,29 @@ static uint64_t traceInit()
 {
 	uint64_t *sm_for_enabled_tag;
 
-	if(g_trace_handle_fd == FD_INITIAL_VALUE) {
-	g_trace_handle_fd = open(TRACE_FILE, O_WRONLY);
-	if (g_trace_handle_fd < 0) {
-		TTRACE_LOG("Fail to open trace file: %s(%d)", strerror(errno), errno);
-		/* in case ftrace debugfs is not mounted, ttrace does not call traceInit() anymore. */
-		if (errno == ENOENT)
-			g_trace_handle_fd = TRACE_FILE_NOT_EXIST;
-
-		set_last_result(TRACE_ERROR_IO_ERROR);
-		return 0;
-		}
-	}
 	if (cur_enabled_tag == ((void *)&dummy)) {
 		g_enabled_tag_fd = open(ENABLED_TAG_FILE, O_RDONLY | O_CLOEXEC);
 		if (g_enabled_tag_fd < 0) {
 			TTRACE_LOG("Fail to open enabled_tag file: %s(%d)", strerror(errno), errno);
 			if (errno == ENOENT)
 				g_enabled_tag_fd = TRACE_FILE_NOT_EXIST;
-
 			return 0;
 		}
+
+		/* access trace_marker after ensuring tag file creation */
+		if(g_trace_handle_fd == FD_INITIAL_VALUE) {
+			g_trace_handle_fd = open(TRACE_FILE, O_WRONLY);
+			if (g_trace_handle_fd < 0) {
+				TTRACE_LOG("Fail to open trace file: %s(%d)", strerror(errno), errno);
+				/* in case ftrace debugfs is not mounted, ttrace does not call traceInit() anymore. */
+				if (errno == ENOENT)
+					g_trace_handle_fd = TRACE_FILE_NOT_EXIST;
+
+				set_last_result(TRACE_ERROR_IO_ERROR);
+				return 0;
+			}
+		}
+
 		sm_for_enabled_tag = mmap(NULL, sizeof(uint64_t), PROT_READ, MAP_SHARED, g_enabled_tag_fd, 0);
 		if (sm_for_enabled_tag == MAP_FAILED) {
 			TTRACE_LOG("error: mmap() failed(%s)\n", strerror(errno));
@@ -120,7 +123,7 @@ void traceBegin(uint64_t tag, const char *name, ...)
 {
 	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN];
-		int len = 0;
+		int len = 0, ret = 0;
 		va_list ap;
 
 		TTRACE_LOG("traceBegin:: write >> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
@@ -128,7 +131,9 @@ void traceBegin(uint64_t tag, const char *name, ...)
 		len = snprintf(buf, MAX_LEN, "B|%d|", getpid());
 		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
 		va_end(ap);
-		write(g_trace_handle_fd, buf, len);
+		ret = write(g_trace_handle_fd, buf, len);
+		if (ret < 0)
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceBegin.\n", len, ret, errno);
 	}
 #ifdef TTRACE_DEBUG
 	else
@@ -141,9 +146,12 @@ void traceBegin(uint64_t tag, const char *name, ...)
 void traceEnd(uint64_t tag)
 {
 	if (isTagEnabled(tag)) {
+		int ret = 0;
 		char end = 'E';
 		TTRACE_LOG("traceEnd:: write>> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
-		write(g_trace_handle_fd, &end, 1);
+		ret = write(g_trace_handle_fd, &end, 1);
+		if (ret < 0)
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceEnd.\n", 1, ret, errno);
 	}
 #ifdef TTRACE_DEBUG
 	else
@@ -163,7 +171,7 @@ void traceAsyncBegin(uint64_t tag, int cookie, const char *name, ...)
 {
 	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN];
-		int len = 0;
+		int len = 0, ret = 0;
 		va_list ap;
 
 		TTRACE_LOG("traceAsyncBegin:: write >> tag: %u tag_bit: %u cookie: %d", tag, *cur_enabled_tag, cookie);
@@ -172,7 +180,9 @@ void traceAsyncBegin(uint64_t tag, int cookie, const char *name, ...)
 		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
 		len += snprintf(buf + len, MAX_LEN - len, "|%d", cookie);
 		va_end(ap);
-		write(g_trace_handle_fd, buf, len);
+		ret = write(g_trace_handle_fd, buf, len);
+		if (ret < 0)
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceAsyncBegin.\n", len, ret, errno);
 	}
 #ifdef TTRACE_DEBUG
 	else
@@ -185,7 +195,7 @@ void traceAsyncEnd(uint64_t tag, int cookie, const char *name, ...)
 {
 	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN];
-		int len = 0;
+		int len = 0, ret = 0;
 		va_list ap;
 
 		TTRACE_LOG("traceAsyncEnd:: write>> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
@@ -194,7 +204,9 @@ void traceAsyncEnd(uint64_t tag, int cookie, const char *name, ...)
 		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
 		len += snprintf(buf + len, MAX_LEN - len, "|%d", cookie);
 		va_end(ap);
-		write(g_trace_handle_fd, buf, len);
+		ret = write(g_trace_handle_fd, buf, len);
+		if (ret < 0)
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceAsyncEnd.\n", len, ret, errno);
 	}
 #ifdef TTRACE_DEBUG
 	else
@@ -213,7 +225,7 @@ void traceMark(uint64_t tag, const char *name, ...)
 {
 	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN], end = 'E';
-		int len = 0;
+		int len = 0, ret = 0;
 		va_list ap;
 
 		TTRACE_LOG("traceMark:: write >> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
@@ -221,8 +233,12 @@ void traceMark(uint64_t tag, const char *name, ...)
 		len = snprintf(buf, MAX_LEN, "B|%d|", getpid());
 		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
 		va_end(ap);
-		write(g_trace_handle_fd, buf, len);
-		write(g_trace_handle_fd, &end, 1);
+		ret = write(g_trace_handle_fd, buf, len);
+		if (ret < 0)
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceMark.\n", len, ret, errno);
+		ret = write(g_trace_handle_fd, &end, 1);
+		if (ret < 0)
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceMark.\n", 1, ret, errno);
 	}
 #ifdef TTRACE_DEBUG
 	else
@@ -242,7 +258,7 @@ void traceCounter(uint64_t tag, int value, const char *name, ...)
 {
 	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN];
-		int len = 0;
+		int len = 0, ret = 0;
 		va_list ap;
 
 		va_start(ap, name);
@@ -251,7 +267,9 @@ void traceCounter(uint64_t tag, int value, const char *name, ...)
 		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
 		len += snprintf(buf + len, MAX_LEN - len, "|%d", value);
 		va_end(ap);
-		write(g_trace_handle_fd, buf, len);
+		ret = write(g_trace_handle_fd, buf, len);
+		if (ret < 0)
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceCounter.\n", len, ret, errno);
 	}
 #ifdef TTRACE_DEBUG
 	else
