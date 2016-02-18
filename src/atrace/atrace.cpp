@@ -65,12 +65,21 @@ const char* k_traceAppCmdlineProperty = "debug.atrace.app_cmdlines";
 typedef enum { OPT, REQ } requiredness  ;
 
 char str_error[256] = "";
+
 struct CommonNode {
 	const char* path;
 	const mode_t	perms;
 };
+
+typedef enum {
+	TTRACE_TAG_IDX = 0,
+	DEBUG_FS_IDX,
+	TRACE_MARKER_IDX,
+	ESSENCE_NODE_IDX	
+} commonNodeIdx;
+
 static const CommonNode commonNodes[] = {
-	{	"/tmp/ttrace_tag",								0666	},
+	{	ENABLED_TAG_FILE,		0664	},
 	{	"/sys/kernel/debug",							0755	},
 	{	"/sys/kernel/debug/tracing/trace_marker",		0222	},
 	{	"/sys/kernel/debug/tracing/trace_clock",		0666	},
@@ -208,6 +217,9 @@ static bool g_categoryEnables[NELEM(k_categories)] = {};
 static bool g_init_exec = false;
 static bool g_append_trace = false;
 static bool g_backup_trace = false;
+
+static struct group group_dev;
+static struct group* group_ptr;
 #endif
 
 /* Sys file paths */
@@ -259,28 +271,35 @@ static bool fileExists(const char* filename) {
 static bool fileIsWritable(const char* filename) {
     return access(filename, W_OK) != -1;
 }
+
+static bool setFilePermisstion (const char *path, const mode_t perms) {
+	//fprintf(stderr, "path: %s, perms: %d, gid: %d\n", path,perms, group_dev.gr_gid);
+	if (0 > chown(path, 0, group_dev.gr_gid)) return false;
+	if (0 > chmod(path, perms)) return false;
+	if (0 > smack_setlabel(path, "*", SMACK_LABEL_ACCESS)) return false;
+
+	return true;
+}
+
 static bool initSysfsPermission() {
-	struct group group_dev;
-	struct group* group_ptr;
-	char buf[128];
-	if(0 != getgrnam_r("developer", &group_dev, buf, sizeof(buf), &group_ptr))
-		return false;
-	for (int i = 0 ; i < NELEM(commonNodes); i++) {
+	for (int i = TTRACE_TAG_IDX + 1 ; i < NELEM(commonNodes); i++) {
 		const CommonNode &node = commonNodes[i];
-		if (node.path != NULL) {
-			if (fileExists(node.path)) {
-				if (strcmp(node.path, "/sys/kernel/debug") == 0) {
-					chmod(node.path, node.perms);
-				}
-				else {
-					chown(node.path, 0, group_dev.gr_gid);
-					chmod(node.path, node.perms);
-					smack_setlabel(node.path, "*", SMACK_LABEL_ACCESS);
-				}
+		printf("initsysfsperm: path- %s, perms- %d\n", node.path, node.perms);
+		if (fileExists(node.path)) {
+			if (i == DEBUG_FS_IDX) {
+				if(0 > chmod(node.path, node.perms))
+					return false;
+			}
+			else {
+				if (!setFilePermisstion(node.path, node.perms))
+					return false;
 			}
 		}
 		else {
-			return false;
+			if(i < ESSENCE_NODE_IDX)
+			{
+				return false;
+			}
 		}
 	}
     return true;
@@ -418,7 +437,6 @@ static bool clearTrace()
 static bool setTraceBufferSizeKB(int size)
 {
     char str[32] = "1";
-    int len;
     if (size < 1) {
         size = 1;
     }
@@ -477,48 +495,76 @@ static bool setTagsProperty(uint64_t tags)
 #ifdef DEVICE_TYPE_TIZEN
 	uint64_t *sm_for_enabled_tag = NULL;
 	int fd = -1;
-	if(g_init_exec) {
-		fd = open("/tmp/tmp_tag", O_CREAT | O_RDWR | O_CLOEXEC, 0666);		
+	char buf[128];
+	const CommonNode &tag_node = commonNodes[TTRACE_TAG_IDX];
 
-	if(fd < 0){
-		fprintf(stderr, "Fail to open enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
+//atrace "--init_exec" mode
+	if(g_init_exec) {
+		if(0 != getgrnam_r("developer", &group_dev, buf, sizeof(buf), &group_ptr))
+			return false;
+		
+		fd = open("/tmp/tmp_tag", O_CREAT | O_RDWR | O_CLOEXEC, 0666);				
+		if(fd < 0){
+			fprintf(stderr, "Fail to open enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
 			return false;
 		}
+		//set file permission, smack label to "/tmp/tmp_tag" and then change it's name to "/tmp/ttrace_tag"
+		if (!setFilePermisstion("/tmp/tmp_tag", tag_node.perms)) 
+		{
+			fprintf(stderr, "error: setFilePermisstion failed(%s): /tmp/tmp_tag\n", strerror_r(errno, str_error, sizeof(str_error)));
+			close(fd);
+			return false;
+		}
+
 		if (ftruncate(fd, sizeof(uint64_t)) < 0) {
 			fprintf(stderr, "error: ftruncate() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
 			close(fd);
-		return false;
-	}
-	sm_for_enabled_tag = (uint64_t*)mmap(NULL, sizeof(uint64_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+			return false;
+		}
+		sm_for_enabled_tag = (uint64_t*)mmap(NULL, sizeof(uint64_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
-	if(sm_for_enabled_tag == MAP_FAILED) {
-		fprintf(stderr, "error: mmap() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
-		close(fd);
-		return false;
-	}
+		if(sm_for_enabled_tag == MAP_FAILED) {
+			fprintf(stderr, "error: mmap() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
+			close(fd);
+			return false;
+		}
+
+		if(!initSysfsPermission()) {
+			fprintf(stderr, "Fail to init sysfs permisions: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
+			close(fd);
+			return false;
+		}
 
 		memset(sm_for_enabled_tag, 0, sizeof(uint64_t));
-		if(-1 == rename("/tmp/tmp_tag", ENABLED_TAG_FILE)) {
+		if(-1 == rename("/tmp/tmp_tag", tag_node.path)) {
 			fprintf(stderr, "Fail to rename enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
 		}
-		if(false == initSysfsPermission()) {
-			fprintf(stderr, "Fail to init sysfs permisions: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
-		}
+
 		if(fileExists(BOOTUP_TRACE)) {
 			FILE *ifile = NULL;
 			char bootup_cmd[128];
 			ifile = fopen(BOOTUP_TRACE, "r");
 			if (ifile == NULL) {
-			    munmap(sm_for_enabled_tag, sizeof(uint64_t));
-			    close(fd);
-			return false;
-		}
-			fgets(bootup_cmd, sizeof(bootup_cmd), ifile);
+				munmap(sm_for_enabled_tag, sizeof(uint64_t));
+				close(fd);
+				return false;
+			}
+			if (fgets(bootup_cmd, sizeof(bootup_cmd), ifile) == NULL) {
+				munmap(sm_for_enabled_tag, sizeof(uint64_t));
+				close(fd);
+				fclose(ifile);
+				return false;
+			}
 			fclose(ifile);
 			remove(BOOTUP_TRACE);
-			system(bootup_cmd);
+			if (0 > system(bootup_cmd)) {
+				munmap(sm_for_enabled_tag, sizeof(uint64_t));
+				close(fd);
+				return false;
+			}
 		}
 	}
+//atrace normal mode
 	else {
 		fd = open(ENABLED_TAG_FILE, O_RDWR | O_CLOEXEC, 0666);		
 		if(fd < 0){
@@ -531,12 +577,11 @@ static bool setTagsProperty(uint64_t tags)
 			close(fd);
 			return false;
 		}
-	*sm_for_enabled_tag = tags;
+		*sm_for_enabled_tag = tags;
 	}
 	// For debug
-	// fprintf(stderr, "Enabled TAGs: %u\n", (uint32_t)*sm_for_enabled_tag);
+	//fprintf(stderr, "Enabled TAGs: %u\n", (uint32_t)*sm_for_enabled_tag);
 	//
-
 	munmap(sm_for_enabled_tag, sizeof(uint64_t));
 	close(fd);
 #else
@@ -645,6 +690,7 @@ static bool setKernelTraceFuncs(const char* funcs)
         ok &= setKernelOptionEnable(k_funcgraphCpuPath, true);
         ok &= setKernelOptionEnable(k_funcgraphProcPath, true);
         ok &= setKernelOptionEnable(k_funcgraphFlatPath, true);
+        ok &= setKernelOptionEnable(k_funcgraphDurationPath, true);
 
         // Set the requested filter functions.
         ok &= truncateFile(k_ftraceFilterPath);

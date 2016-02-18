@@ -18,15 +18,16 @@
 #ifndef _CDBG_TIZEN_TTRACE_H_
 #define _CDBG_TIZEN_TTRACE_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #cmakedefine TTRACE_PROFILE_MOBILE
 #cmakedefine TTRACE_PROFILE_TV
 #cmakedefine TTRACE_PROFILE_WEARABLE
 
+#include <stdio.h>
 #include "stdint.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
 
 /* Define TTRACE_TAG */
 #define TTRACE_TAG_NEVER               0       // This tag is never enabled.
