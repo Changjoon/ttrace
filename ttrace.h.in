@@ -22,7 +22,7 @@
 #cmakedefine TTRACE_PROFILE_TV
 #cmakedefine TTRACE_PROFILE_WEARABLE
 
-#include <stdio.h>
+
 #include "stdint.h"
 
 #ifdef __cplusplus
@@ -46,13 +46,14 @@ extern "C" {
 #define TTRACE_TAG_MEDIA_CONTENT       (1<<12)
 #define TTRACE_TAG_MEDIA_DB            (1<<13)
 #define TTRACE_TAG_SCREEN_MIRRORING    (1<<14)
-#define TTRACE_TAG_APP                 (1<<15)
+#define TTRACE_TAG_EFL                 (1<<15)
+#define TTRACE_TAG_APP                 (1<<20)
 
 #ifdef TTRACE_PROFILE_MOBILE
 //define TAGs belonging to mobile profile only
 #elif defined TTRACE_PROFILE_TV
 //define TAGs belonging to tv profile only
-#define TTRACE_TAG_SYSTEM              (1<<16)
+#define TTRACE_TAG_SYSTEM              (1<<21)
 #elif defined TTRACE_PROFILE_WEARABLE
 //define TAGs belonging to wearable profile only
 #endif

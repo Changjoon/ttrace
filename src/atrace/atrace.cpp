@@ -144,6 +144,7 @@ static const TracingCategory k_categories[] = {
     { "mc",          "Multimedia content",  TTRACE_TAG_MEDIA_CONTENT, { } },
     { "mdb",         "Multimedia database", TTRACE_TAG_MEDIA_DB, { } },
     { "scmirroring", "Screen mirroring",    TTRACE_TAG_SCREEN_MIRRORING, { } },
+    { "efl",         "EFL",                 TTRACE_TAG_EFL, { } },
     { "app",         "Application",         TTRACE_TAG_APP, { } },
 #else		// Android tags
     { "gfx",        "Graphics",         ATRACE_TAG_GRAPHICS, { } },
