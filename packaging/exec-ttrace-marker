@@ -1,5 +1,5 @@
 #!/bin/bash
-
+# Note: This file has been deprecated
 tag="/tmp/ttrace_tag"
 conf="/etc/ttrace.conf"
 change_permission="--update"
@@ -13,64 +13,83 @@ function init_perms(){
     chown root:developer /sys/kernel/debug/tracing/trace_marker
     chmod 0222 /sys/kernel/debug/tracing/trace_marker
     chsmack -a '*' /sys/kernel/debug/tracing/trace_marker
+
     chown root:developer /sys/kernel/debug/tracing/trace_clock
     chmod 0664 /sys/kernel/debug/tracing/trace_clock
-
     chsmack -a '*' /sys/kernel/debug/tracing/trace_clock
+
     chown root:developer /sys/kernel/debug/tracing/buffer_size_kb
     chmod 0664 /sys/kernel/debug/tracing/buffer_size_kb
     chsmack -a '*' /sys/kernel/debug/tracing/buffer_size_kb
+
     chown root:developer /sys/kernel/debug/tracing/options/overwrite
     chmod 0664 /sys/kernel/debug/tracing/options/overwrite
     chsmack -a '*' /sys/kernel/debug/tracing/options/overwrite
+
     chown root:developer /sys/kernel/debug/tracing/options/print-tgid
     chmod 0664 /sys/kernel/debug/tracing/options/print-tgid
     chsmack -a '*' /sys/kernel/debug/tracing/options/print-tgid
+
     chown root:developer /sys/kernel/debug/tracing/events/sched/sched_switch/enable
     chmod 0664 /sys/kernel/debug/tracing/events/sched/sched_switch/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/sched/sched_switch/enable
+
     chown root:developer /sys/kernel/debug/tracing/events/sched/sched_wakeup/enable
     chmod 0664 /sys/kernel/debug/tracing/events/sched/sched_wakeup/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/sched/sched_wakeup/enable
+
     chown root:developer /sys/kernel/debug/tracing/events/power/cpu_frequency/enable
     chmod 0664 /sys/kernel/debug/tracing/events/power/cpu_frequency/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/power/cpu_frequency/enable
+
     chown root:developer /sys/kernel/debug/tracing/events/power/clock_set_rate/enable
     chmod 0664 /sys/kernel/debug/tracing/events/power/clock_set_rate/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/power/clock_set_rate/enable
+
     chown root:developer /sys/kernel/debug/tracing/events/cpufreq_interactive/enable
     chmod 0664 /sys/kernel/debug/tracing/events/cpufreq_interactive/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/cpufreq_interactive/enable
+
     chown root:developer /sys/kernel/debug/tracing/events/power/cpu_idle/enable
     chmod 0664 /sys/kernel/debug/tracing/events/power/cpu_idle/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/power/cpu_idle/enable
+
     chown root:developer /sys/kernel/debug/tracing/events/ext4/ext4_sync_file_enter/enable
     chmod 0664 /sys/kernel/debug/tracing/events/ext4/ext4_sync_file_enter/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/ext4/ext4_sync_file_enter/enable
+
     chown root:developer /sys/kernel/debug/tracing/events/ext4/ext4_sync_file_exit/enable
     chmod 0664 /sys/kernel/debug/tracing/events/ext4/ext4_sync_file_exit/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/ext4/ext4_sync_file_exit/enable
+
     chown root:developer /sys/kernel/debug/tracing/events/block/block_rq_issue/enable
     chmod 0664 /sys/kernel/debug/tracing/events/block/block_rq_issue/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/block/block_rq_issue/enable
+
     chown root:developer /sys/kernel/debug/tracing/events/block/block_rq_complete/enable
     chmod 0664 /sys/kernel/debug/tracing/events/block/block_rq_complete/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/block/block_rq_complete/enable
+
     chown root:developer /sys/kernel/debug/tracing/events/mmc/enable
     chmod 0664 /sys/kernel/debug/tracing/events/mmc/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/mmc/enable
+
     chown root:developer /sys/kernel/debug/tracing/events/sync/enable
     chmod 0664 /sys/kernel/debug/tracing/events/sync/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/sync/enable
+
     chown root:developer /sys/kernel/debug/tracing/events/workqueue/enable
     chmod 0664 /sys/kernel/debug/tracing/events/workqueue/enable
     chsmack -a '*' /sys/kernel/debug/tracing/events/workqueue/enable
+
     chown root:developer /sys/kernel/debug/tracing/current_tracer
     chmod 0664 /sys/kernel/debug/tracing/current_tracer
     chsmack -a '*' /sys/kernel/debug/tracing/current_tracer
+
     chown root:developer /sys/kernel/debug/tracing/tracing_on
     chmod 0664 /sys/kernel/debug/tracing/tracing_on
     chsmack -a '*' /sys/kernel/debug/tracing/tracing_on
+
     chown root:developer /sys/kernel/debug/tracing/trace
     chmod 0660 /sys/kernel/debug/tracing/trace
     chsmack -a '*' /sys/kernel/debug/tracing/trace
