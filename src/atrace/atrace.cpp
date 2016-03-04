@@ -74,13 +74,15 @@ struct CommonNode {
 typedef enum {
 	TTRACE_TAG_IDX = 0,
 	DEBUG_FS_IDX,
+	TRACING_FS_IDX,
 	TRACE_MARKER_IDX,
-	ESSENCE_NODE_IDX	
+	ESSENCE_NODE_IDX
 } commonNodeIdx;
 
 static const CommonNode commonNodes[] = {
 	{	ENABLED_TAG_FILE,		0664	},
 	{	"/sys/kernel/debug",							0755	},
+	{	"/sys/kernel/debug/tracing",					0755	},
 	{	"/sys/kernel/debug/tracing/trace_marker",		0222	},
 	{	"/sys/kernel/debug/tracing/trace_clock",		0666	},
 	{	"/sys/kernel/debug/tracing/buffer_size_kb",		0666	},
@@ -273,7 +275,7 @@ static bool fileIsWritable(const char* filename) {
     return access(filename, W_OK) != -1;
 }
 
-static bool setFilePermisstion (const char *path, const mode_t perms) {
+static bool setFilePermission (const char *path, const mode_t perms) {
 	//fprintf(stderr, "path: %s, perms: %d, gid: %d\n", path,perms, group_dev.gr_gid);
 	if (0 > chown(path, 0, group_dev.gr_gid)) return false;
 	if (0 > chmod(path, perms)) return false;
@@ -287,12 +289,12 @@ static bool initSysfsPermission() {
 		const CommonNode &node = commonNodes[i];
 		printf("initsysfsperm: path- %s, perms- %d\n", node.path, node.perms);
 		if (fileExists(node.path)) {
-			if (i == DEBUG_FS_IDX) {
+			if (i == DEBUG_FS_IDX || i == TRACING_FS_IDX) {
 				if(0 > chmod(node.path, node.perms))
 					return false;
 			}
 			else {
-				if (!setFilePermisstion(node.path, node.perms))
+				if (!setFilePermission(node.path, node.perms))
 					return false;
 			}
 		}
@@ -503,16 +505,16 @@ static bool setTagsProperty(uint64_t tags)
 	if(g_init_exec) {
 		if(0 != getgrnam_r("developer", &group_dev, buf, sizeof(buf), &group_ptr))
 			return false;
-		
+
 		fd = open("/tmp/tmp_tag", O_CREAT | O_RDWR | O_CLOEXEC, 0666);				
 		if(fd < 0){
 			fprintf(stderr, "Fail to open enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
 			return false;
 		}
 		//set file permission, smack label to "/tmp/tmp_tag" and then change it's name to "/tmp/ttrace_tag"
-		if (!setFilePermisstion("/tmp/tmp_tag", tag_node.perms)) 
+		if (!setFilePermission("/tmp/tmp_tag", tag_node.perms))
 		{
-			fprintf(stderr, "error: setFilePermisstion failed(%s): /tmp/tmp_tag\n", strerror_r(errno, str_error, sizeof(str_error)));
+			fprintf(stderr, "error: setFilePermission failed(%s): /tmp/tmp_tag\n", strerror_r(errno, str_error, sizeof(str_error)));
 			close(fd);
 			return false;
 		}
@@ -532,6 +534,7 @@ static bool setTagsProperty(uint64_t tags)
 
 		if(!initSysfsPermission()) {
 			fprintf(stderr, "Fail to init sysfs permisions: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
+			munmap(sm_for_enabled_tag, sizeof(uint64_t));
 			close(fd);
 			return false;
 		}

@@ -63,43 +63,42 @@ uint64_t *cur_enabled_tag = (void *)&dummy;
 static uint64_t traceInit()
 {
 	uint64_t *sm_for_enabled_tag;
+	TTRACE_LOG("traceInit: %p %p", cur_enabled_tag, ((void *)&dummy));
 
 	if (cur_enabled_tag == ((void *)&dummy)) {
 		g_enabled_tag_fd = open(ENABLED_TAG_FILE, O_RDONLY | O_CLOEXEC);
 		if (g_enabled_tag_fd < 0) {
 			TTRACE_LOG("Fail to open enabled_tag file: %s(%d)", strerror(errno), errno);
-			if (errno == ENOENT)
-				g_enabled_tag_fd = TRACE_FILE_NOT_EXIST;
 			return 0;
 		}
-
-		/* access trace_marker after ensuring tag file creation */
-		if(g_trace_handle_fd == FD_INITIAL_VALUE) {
-			g_trace_handle_fd = open(TRACE_FILE, O_WRONLY);
-			if (g_trace_handle_fd < 0) {
-				TTRACE_LOG("Fail to open trace file: %s(%d)", strerror(errno), errno);
-				/* in case ftrace debugfs is not mounted, ttrace does not call traceInit() anymore. */
-				if (errno == ENOENT)
-					g_trace_handle_fd = TRACE_FILE_NOT_EXIST;
-
-				set_last_result(TRACE_ERROR_IO_ERROR);
-				return 0;
-			}
-		}
-
 		sm_for_enabled_tag = mmap(NULL, sizeof(uint64_t), PROT_READ, MAP_SHARED, g_enabled_tag_fd, 0);
 		if (sm_for_enabled_tag == MAP_FAILED) {
 			TTRACE_LOG("error: mmap() failed(%s)\n", strerror(errno));
+			close(g_enabled_tag_fd);
 			return 0;
 		}
 		cur_enabled_tag = sm_for_enabled_tag;
-		TTRACE_LOG("cur_enabled_tag: %u %p", *cur_enabled_tag, cur_enabled_tag);
-
-		return *cur_enabled_tag;
-	} else {
-		TTRACE_LOG("traceInit: %u", *cur_enabled_tag);
-		return *cur_enabled_tag;
 	}
+
+	/* access trace_marker after ensuring tag file creation */
+	if(g_trace_handle_fd == FD_INITIAL_VALUE) {
+		g_trace_handle_fd = open(TRACE_FILE, O_WRONLY);
+		if (g_trace_handle_fd < 0) {
+			TTRACE_LOG("Fail to open trace file: %s(%d)", strerror(errno), errno);
+			/*
+			 * If ftrace debugfs is not mounted, ttrace does not call traceInit() anymore. 
+			 * we should decide how to handle if file permission is not given properly. keep try? or Nerver try agin? 
+			*/
+			if (errno == ENOENT)
+				g_trace_handle_fd = TRACE_FILE_NOT_EXIST;
+
+			set_last_result(TRACE_ERROR_IO_ERROR);
+			return 0;
+		}
+	}
+
+	TTRACE_LOG("traceInit:: cur_enabled_tag >> %u", *cur_enabled_tag);
+	return *cur_enabled_tag;
 }
 
 static inline uint64_t isTagEnabled(uint64_t cur_tag)
@@ -109,7 +108,7 @@ static inline uint64_t isTagEnabled(uint64_t cur_tag)
 	/* if no tag is enabled, trace all tags. */
 	cur_tag |= TTRACE_TAG_ALWAYS;
 
-	if (g_trace_handle_fd < 0 || cur_enabled_tag == ((void *)&dummy))
+	if (g_trace_handle_fd == FD_INITIAL_VALUE || cur_enabled_tag == ((void *)&dummy))
 		return (cur_tag & traceInit());
 
 	return (cur_tag & *cur_enabled_tag);
