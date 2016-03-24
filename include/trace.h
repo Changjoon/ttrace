@@ -37,7 +37,7 @@ extern "C" {
 
 /**
 * @brief Enumeration for Trace Error.
-* @since_tizen 2.4
+* @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
 */
 typedef enum {
 	TRACE_ERROR_NONE = TIZEN_ERROR_NONE,	/**< Successful */
@@ -47,7 +47,7 @@ typedef enum {
 /**
  * @brief Writes a trace event to indicate that a synchronous event has begun.
  *
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  * @remarks The specific error code can be obtained using the get_last_result() method. Error codes are described in Exception section.
  * @param[in] name The name of event (optionally containing format specifiers)
  * @exception TRACE_ERROR_NONE	Success
@@ -59,7 +59,7 @@ void trace_begin(const char *name, ...);
 /**
  * @brief Writes a trace event to indicate that the synchronous event has ended.
  *
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  * @remarks trace_end() ends the most recently called trace_begin().
  * @remarks The specific error code can be obtained using the get_last_result() method. Error codes are described in Exception section.
  * @exception TRACE_ERROR_NONE  Success
@@ -71,7 +71,7 @@ void trace_end();
 /**
  * @brief Writes a trace event to indicate that an asynchronous event has begun.
  *
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  * @remarks The specific error code can be obtained using the get_last_result() method. Error codes are described in Exception section.
  * @param[in] cookie An unique identifier for distinguishing simultaneous events
  * @param[in] name The name of event (optionally containing format specifiers)
@@ -84,7 +84,7 @@ void trace_async_begin(int cookie, const char *name, ...);
 /**
  * @brief Writes a trace event to indicate that the asynchronous event has ended.
  *
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  * @remarks trace_async_end() ends matched trace_async_begin() which has same cookie and name.
  * @remarks The specific error code can be obtained using the get_last_result() method. Error codes are described in Exception section.
  * @param[in] cookie An unique identifier for distinguishing simultaneous events
@@ -98,7 +98,7 @@ void trace_async_end(int cookie, const char *name, ...);
 /**
  * @brief Writes a trace event to track change of integer counter
  *
- * @since_tizen 2.4
+ * @since_tizen @if MOBILE 2.4 @elseif WEARABLE 3.0 @endif
  * @remarks The specific error code can be obtained using the get_last_result() method. Error codes are described in Exception section.
  * @param[in] value The counter value
  * @param[in] name The name of event (optionally containing format specifiers)
