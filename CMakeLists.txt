@@ -26,6 +26,13 @@ ELSEIF("${TTRACE_PROFILE}" STREQUAL "wearable")
 ELSE()
 	SET(TTRACE_PROFILE_MOBILE ON)
 ENDIF()
+
+IF("${TTRACE_TIZEN_VERSION_MAJOR}" STREQUAL "3")
+	SET(TTRACE_TIZEN_VERSION_MAJOR "3")
+ELSE()
+	SET(TTRACE_TIZEN_VERSION_MAJOR "2")
+ENDIF()
+
 configure_file(${TTRACE_H_IN} "include/ttrace.h")
 
 #################################################################

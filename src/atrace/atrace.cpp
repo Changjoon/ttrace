@@ -221,8 +221,14 @@ static bool g_init_exec = false;
 static bool g_append_trace = false;
 static bool g_backup_trace = false;
 
+#if TTRACE_TIZEN_VERSION_MAJOR < 3
 static struct group group_dev;
+#define TTRACE_GROUP_NAME	"developer"
+#else
+#define TTRACE_GROUP_NAME	"users"
+#endif
 static struct group* group_ptr;
+
 #endif
 
 /* Sys file paths */
@@ -277,7 +283,11 @@ static bool fileIsWritable(const char* filename) {
 
 static bool setFilePermission (const char *path, const mode_t perms) {
 	//fprintf(stderr, "path: %s, perms: %d, gid: %d\n", path,perms, group_dev.gr_gid);
+#if TTRACE_TIZEN_VERSION_MAJOR < 3
 	if (0 > chown(path, 0, group_dev.gr_gid)) return false;
+#else
+	if (0 > chown(path, 0, group_ptr->gr_gid)) return false;
+#endif
 	if (0 > chmod(path, perms)) return false;
 	if (0 > smack_setlabel(path, "*", SMACK_LABEL_ACCESS)) return false;
 
@@ -503,8 +513,16 @@ static bool setTagsProperty(uint64_t tags)
 
 //atrace "--init_exec" mode
 	if(g_init_exec) {
-		if(0 != getgrnam_r("developer", &group_dev, buf, sizeof(buf), &group_ptr))
-			return false;
+#if TTRACE_TIZEN_VERSION_MAJOR < 3
+                if(0 != getgrnam_r(TTRACE_GROUP_NAME, &group_dev, buf, sizeof(buf), &group_ptr))
+#else
+		group_ptr = getgrnam(TTRACE_GROUP_NAME);
+		if(group_ptr == NULL)
+#endif
+		{
+		    fprintf(stderr, "Fail to group[%s] info: %s(%d)\n", TTRACE_GROUP_NAME, strerror_r(errno, str_error, sizeof(str_error)), errno);
+		    return false;
+		}
 
 		fd = open("/tmp/tmp_tag", O_CREAT | O_RDWR | O_CLOEXEC, 0666);				
 		if(fd < 0){

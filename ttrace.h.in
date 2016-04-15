@@ -22,6 +22,8 @@
 #cmakedefine TTRACE_PROFILE_TV
 #cmakedefine TTRACE_PROFILE_WEARABLE
 
+#cmakedefine TTRACE_TIZEN_VERSION_MAJOR @TTRACE_TIZEN_VERSION_MAJOR@
+
 
 #include "stdint.h"
 
