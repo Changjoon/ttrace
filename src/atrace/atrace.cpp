@@ -220,9 +220,8 @@ static bool g_categoryEnables[NELEM(k_categories)] = {};
 static bool g_init_exec = false;
 static bool g_append_trace = false;
 static bool g_backup_trace = false;
-
-#if TTRACE_TIZEN_VERSION_MAJOR < 3
 static struct group group_dev;
+#if TTRACE_TIZEN_VERSION_MAJOR < 3
 #define TTRACE_GROUP_NAME	"developer"
 #else
 #define TTRACE_GROUP_NAME	"users"
@@ -283,11 +282,7 @@ static bool fileIsWritable(const char* filename) {
 
 static bool setFilePermission (const char *path, const mode_t perms) {
 	//fprintf(stderr, "path: %s, perms: %d, gid: %d\n", path,perms, group_dev.gr_gid);
-#if TTRACE_TIZEN_VERSION_MAJOR < 3
 	if (0 > chown(path, 0, group_dev.gr_gid)) return false;
-#else
-	if (0 > chown(path, 0, group_ptr->gr_gid)) return false;
-#endif
 	if (0 > chmod(path, perms)) return false;
 	if (0 > smack_setlabel(path, "*", SMACK_LABEL_ACCESS)) return false;
 
@@ -508,17 +503,12 @@ static bool setTagsProperty(uint64_t tags)
 #ifdef DEVICE_TYPE_TIZEN
 	uint64_t *sm_for_enabled_tag = NULL;
 	int fd = -1;
-	char buf[128];
 	const CommonNode &tag_node = commonNodes[TTRACE_TAG_IDX];
 
 //atrace "--init_exec" mode
 	if(g_init_exec) {
-#if TTRACE_TIZEN_VERSION_MAJOR < 3
+		char buf[256];	//insufficient buffer size can cause "ERANGE" as a result of getgrnam_r
                 if(0 != getgrnam_r(TTRACE_GROUP_NAME, &group_dev, buf, sizeof(buf), &group_ptr))
-#else
-		group_ptr = getgrnam(TTRACE_GROUP_NAME);
-		if(group_ptr == NULL)
-#endif
 		{
 		    fprintf(stderr, "Fail to group[%s] info: %s(%d)\n", TTRACE_GROUP_NAME, strerror_r(errno, str_error, sizeof(str_error)), errno);
 		    return false;
