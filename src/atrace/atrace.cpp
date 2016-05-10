@@ -43,6 +43,7 @@
 
 #define BACKUP_TRACE	"/tmp/trace.backup"
 #define BOOTUP_TRACE	"/etc/ttrace.conf"
+#define DEF_GR_SIZE	1024
 #else
 #include <binder/IBinder.h>
 #include <binder/IServiceManager.h>
@@ -507,11 +508,40 @@ static bool setTagsProperty(uint64_t tags)
 
 //atrace "--init_exec" mode
 	if(g_init_exec) {
-		char buf[256];	//insufficient buffer size can cause "ERANGE" as a result of getgrnam_r
-                if(0 != getgrnam_r(TTRACE_GROUP_NAME, &group_dev, buf, sizeof(buf), &group_ptr))
+		size_t bufSize = DEF_GR_SIZE;
+		char buf[DEF_GR_SIZE];
+		int ret = 0;
+		ret = getgrnam_r(TTRACE_GROUP_NAME, &group_dev, buf, bufSize, &group_ptr);
+
+		if (ret != 0 && ret != ERANGE)
 		{
-		    fprintf(stderr, "Fail to group[%s] info: %s(%d)\n", TTRACE_GROUP_NAME, strerror_r(errno, str_error, sizeof(str_error)), errno);
-		    return false;
+			fprintf(stderr, "Fail to group[%s] info: %s(%d)\n", TTRACE_GROUP_NAME, strerror_r(errno, str_error, sizeof(str_error)), errno);
+			return false;
+		}
+		
+		bool isInvalid = false;
+		while(ret == ERANGE)
+		{
+			long int tmpSize = -1;
+
+			if(!isInvalid)
+				tmpSize = sysconf(_SC_GETGR_R_SIZE_MAX);
+
+			if (tmpSize == -1) 
+			{
+				bufSize *= 2;
+			}
+			else bufSize = (size_t) tmpSize;
+
+			char *dynbuf = (char *) malloc(bufSize);
+			if(dynbuf == NULL)
+			{
+				fprintf(stderr, "Fail to allocate buffer for group[%s]: %s(%d)\n", TTRACE_GROUP_NAME, strerror_r(errno, str_error, sizeof(str_error)), errno);
+				return false;
+			}
+			ret = getgrnam_r(TTRACE_GROUP_NAME, &group_dev, dynbuf, bufSize, &group_ptr);
+			if(ret == ERANGE) isInvalid = true;
+			free(dynbuf);
 		}
 
 		fd = open("/tmp/tmp_tag", O_CREAT | O_RDWR | O_CLOEXEC, 0666);				
