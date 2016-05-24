@@ -33,6 +33,6 @@ echo "$COMMAND" > "$CONF"
 
 sync
 sleep 1
-reboot
+reboot -f
 
 exit 0
