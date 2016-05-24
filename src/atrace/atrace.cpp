@@ -569,7 +569,8 @@ static bool setTagsProperty(uint64_t tags)
 			close(fd);
 			return false;
 		}
-
+		//for auto-mounting tracingfs (>= linux 4.1.x)
+		system("ls -al /sys/kernel/debug/tracing > /dev/null 2>&1");
 		if(!initSysfsPermission()) {
 			fprintf(stderr, "Fail to init sysfs permisions: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
 			munmap(sm_for_enabled_tag, sizeof(uint64_t));
