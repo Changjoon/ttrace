@@ -25,6 +25,7 @@
 #include "ttrace.h"
 #include "trace.h"
 #include "dlog.h"
+#include "ttrace-extension.h"
 
 #define ENABLE_TTRACE
 
@@ -54,8 +55,12 @@
 #define FD_INITIAL_VALUE -1
 #define TRACE_FILE_NOT_EXIST -2
 
+#define EXT_DEACTIVATED 0
+#define EXT_ACTIVATED 1
+
 int g_trace_handle_fd = FD_INITIAL_VALUE;
 int g_enabled_tag_fd = FD_INITIAL_VALUE;
+int g_extension_state = EXT_DEACTIVATED;
 
 static uint64_t dummy = 0;
 uint64_t *cur_enabled_tag = (void *)&dummy;
@@ -65,6 +70,7 @@ static uint64_t traceInit()
 	uint64_t *sm_for_enabled_tag;
 	TTRACE_LOG("traceInit: %p %p", cur_enabled_tag, ((void *)&dummy));
 
+	g_extension_state = EXT_ACTIVATED;
 	if (cur_enabled_tag == ((void *)&dummy)) {
 		g_enabled_tag_fd = open(ENABLED_TAG_FILE, O_RDONLY | O_CLOEXEC);
 		if (g_enabled_tag_fd < 0) {
@@ -96,8 +102,10 @@ static uint64_t traceInit()
 			return 0;
 		}
 	}
-
 	TTRACE_LOG("traceInit:: cur_enabled_tag >> %u", *cur_enabled_tag);
+
+	/* ttrace is ready. deactive g_extension_state */
+	g_extension_state = EXT_DEACTIVATED;
 	return *cur_enabled_tag;
 }
 
@@ -121,35 +129,41 @@ static inline uint64_t isTagEnabled(uint64_t cur_tag)
  */
 void traceBegin(uint64_t tag, const char *name, ...)
 {
-	if (isTagEnabled(tag)) {
+	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
 		char buf[MAX_LEN];
 		int len = 0, ret = 0;
 		va_list ap;
 
 		TTRACE_LOG("traceBegin:: write >> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
+
 		va_start(ap, name);
 		len = snprintf(buf, MAX_LEN, "B|%d|", getpid());
 		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
 		va_end(ap);
-		ret = write(g_trace_handle_fd, buf, len);
+
+		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(buf, len);
+		else 		ret = write(g_trace_handle_fd, buf, len);
+
 		if (ret < 0)
 			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceBegin.\n", len, ret, errno);
 	}
-#ifdef TTRACE_DEBUG
-	else
+#ifdef TTRACE_DEBUG	
+	else {
 		TTRACE_LOG("traceBegin:: disabled tag >> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
 
 #endif
-
 }
 
 void traceEnd(uint64_t tag)
 {
-	if (isTagEnabled(tag)) {
+	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
 		int ret = 0;
 		char end = 'E';
 		TTRACE_LOG("traceEnd:: write>> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
-		ret = write(g_trace_handle_fd, &end, 1);
+
+		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write("E", 1);
+		else 		ret = write(g_trace_handle_fd, &end, 1);
+
 		if (ret < 0)
 			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceEnd.\n", 1, ret, errno);
 	}
@@ -169,7 +183,7 @@ void traceEnd(uint64_t tag)
  */
 void traceAsyncBegin(uint64_t tag, int cookie, const char *name, ...)
 {
-	if (isTagEnabled(tag)) {
+	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
 		char buf[MAX_LEN];
 		int len = 0, ret = 0;
 		va_list ap;
@@ -180,7 +194,10 @@ void traceAsyncBegin(uint64_t tag, int cookie, const char *name, ...)
 		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
 		len += snprintf(buf + len, MAX_LEN - len, "|%d", cookie);
 		va_end(ap);
-		ret = write(g_trace_handle_fd, buf, len);
+
+		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(buf, len);
+		else	ret = write(g_trace_handle_fd, buf, len);
+
 		if (ret < 0)
 			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceAsyncBegin.\n", len, ret, errno);
 	}
@@ -193,7 +210,7 @@ void traceAsyncBegin(uint64_t tag, int cookie, const char *name, ...)
 
 void traceAsyncEnd(uint64_t tag, int cookie, const char *name, ...)
 {
-	if (isTagEnabled(tag)) {
+	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
 		char buf[MAX_LEN];
 		int len = 0, ret = 0;
 		va_list ap;
@@ -204,7 +221,10 @@ void traceAsyncEnd(uint64_t tag, int cookie, const char *name, ...)
 		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
 		len += snprintf(buf + len, MAX_LEN - len, "|%d", cookie);
 		va_end(ap);
-		ret = write(g_trace_handle_fd, buf, len);
+
+		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(buf, len);
+		else	ret = write(g_trace_handle_fd, buf, len);
+
 		if (ret < 0)
 			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceAsyncEnd.\n", len, ret, errno);
 	}
@@ -223,7 +243,7 @@ void traceAsyncEnd(uint64_t tag, int cookie, const char *name, ...)
 /* LCOV_EXCL_START */
 void traceMark(uint64_t tag, const char *name, ...)
 {
-	if (isTagEnabled(tag)) {
+	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
 		char buf[MAX_LEN], end = 'E';
 		int len = 0, ret = 0;
 		va_list ap;
@@ -233,10 +253,16 @@ void traceMark(uint64_t tag, const char *name, ...)
 		len = snprintf(buf, MAX_LEN, "B|%d|", getpid());
 		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
 		va_end(ap);
-		ret = write(g_trace_handle_fd, buf, len);
+
+		if (g_extension_state == EXT_ACTIVATED) ttrace_extension_write(buf, len);
+		else	ret = write(g_trace_handle_fd, buf, len);
+		
 		if (ret < 0)
 			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceMark.\n", len, ret, errno);
-		ret = write(g_trace_handle_fd, &end, 1);
+
+		if (g_extension_state == EXT_ACTIVATED) ttrace_extension_write("E", 1);
+		else	ret = write(g_trace_handle_fd, &end, 1);
+
 		if (ret < 0)
 			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceMark.\n", 1, ret, errno);
 	}
@@ -256,7 +282,7 @@ void traceMark(uint64_t tag, const char *name, ...)
  */
 void traceCounter(uint64_t tag, int value, const char *name, ...)
 {
-	if (isTagEnabled(tag)) {
+	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
 		char buf[MAX_LEN];
 		int len = 0, ret = 0;
 		va_list ap;
@@ -267,7 +293,10 @@ void traceCounter(uint64_t tag, int value, const char *name, ...)
 		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
 		len += snprintf(buf + len, MAX_LEN - len, "|%d", value);
 		va_end(ap);
-		ret = write(g_trace_handle_fd, buf, len);
+
+		if (g_extension_state == EXT_ACTIVATED) ttrace_extension_write(buf, len);
+		else	ret = write(g_trace_handle_fd, buf, len);
+
 		if (ret < 0)
 			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceCounter.\n", len, ret, errno);
 	}

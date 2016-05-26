@@ -8,6 +8,6 @@ includedir=@INCLUDEDIR@
 Name: ttrace
 Description: T-trace for tizen
 Version: @VERSION@
-Requires: dlog
+Requires: dlog ttrace-extension
 Libs: -L${libdir} -lttrace
 Cflags: -I${includedir}
