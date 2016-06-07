@@ -77,19 +77,15 @@ cp LICENSE %{buildroot}/usr/share/license/%{name}
 %{_libdir}/libttrace.so.*
 %{_unitdir}/ttrace-marker.service
 %{_unitdir}/ttrace-marker.service.wants/
-%attr(755,root,developer) %{_bindir}/atrace
-%attr(755,root,developer) %{_bindir}/atrace-1.1
+%attr(755,root,users) %{_bindir}/atrace
+%attr(755,root,users) %{_bindir}/atrace-1.1
 %{_unitdir}/sys-kernel-debug.mount.wants/ttrace-marker.service
 %attr(755,root,root) %{_bindir}/atrace-bootup.sh
 /usr/share/license/%{name}
 
 %files devel
 %defattr(-,root,root,-)
-%{_includedir}/ttrace.h
-%{_includedir}/TTraceWrapper.h
-%{_includedir}/trace.h
+%{_includedir}/*.h
 %{_libdir}/libttrace.so
 %{_libdir}/libttrace.a
-%{_libdir}/pkgconfig/ttrace.pc
-%{_libdir}/pkgconfig/ttrace-static.pc
-%{_libdir}/pkgconfig/atrace.pc
+%{_libdir}/pkgconfig/*.pc

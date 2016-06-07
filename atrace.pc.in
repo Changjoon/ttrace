@@ -9,5 +9,5 @@ Name: atrace
 Description: atrace for tizen
 Version: @VERSION@
 Requires: zlib
-Libs: -L${libdir} -latrace
+Libs: -L${libdir}
 Cflags: -I${includedir}
