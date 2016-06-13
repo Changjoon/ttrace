@@ -1,15 +1,4 @@
 <manifest>
-	<define>
-		<domain name="ttrace" policy="restricted"/>
-		<request>
-			<smack request="sdbd" type="r" />
-		</request>
-	</define>
-	<assign>
-		<filesystem path="/usr/bin/atrace" label="_" exec_label="ttrace" />
-		<filesystem path="/usr/bin/atrace-1.1" label="_" exec_label="ttrace" />
-		<filesystem path="/usr/bin/atrace-bootup.sh" label="_" exec_label="ttrace" />
-	</assign>
 	<request>
 		<domain name="_"/>
 	</request>
