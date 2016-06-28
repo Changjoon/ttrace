@@ -1,5 +1,5 @@
 #!/bin/bash
-
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
 SCRIPT=`basename ${BASH_SOURCE[0]}`
 
 #Help function
