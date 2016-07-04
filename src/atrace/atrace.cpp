@@ -511,6 +511,11 @@ static bool setTagsProperty(uint64_t tags)
 		size_t bufSize = DEF_GR_SIZE;
 		char buf[DEF_GR_SIZE];
 		int ret = 0;
+
+		if(fileExists(ENABLED_TAG_FILE)) {
+			fprintf(stderr, "[Info] T-trace has been already initailized\n");
+			return false; //atrace has been already initailized.
+		}
 		ret = getgrnam_r(TTRACE_GROUP_NAME, &group_dev, buf, bufSize, &group_ptr);
 
 		if (ret != 0 && ret != ERANGE)
@@ -543,7 +548,6 @@ static bool setTagsProperty(uint64_t tags)
 			if(ret == ERANGE) isInvalid = true;
 			free(dynbuf);
 		}
-
 		fd = open("/tmp/tmp_tag", O_CREAT | O_RDWR | O_CLOEXEC, 0666);				
 		if(fd < 0){
 			fprintf(stderr, "Fail to open enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
@@ -552,20 +556,20 @@ static bool setTagsProperty(uint64_t tags)
 		//set file permission, smack label to "/tmp/tmp_tag" and then change it's name to "/tmp/ttrace_tag"
 		if (!setFilePermission("/tmp/tmp_tag", tag_node.perms))
 		{
-			fprintf(stderr, "error: setFilePermission failed(%s): /tmp/tmp_tag\n", strerror_r(errno, str_error, sizeof(str_error)));
+			fprintf(stderr, "setFilePermission failed(%s): /tmp/tmp_tag\n", strerror_r(errno, str_error, sizeof(str_error)));
 			close(fd);
 			return false;
 		}
 
 		if (ftruncate(fd, sizeof(uint64_t)) < 0) {
-			fprintf(stderr, "error: ftruncate() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
+			fprintf(stderr, "ftruncate() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
 			close(fd);
 			return false;
 		}
 		sm_for_enabled_tag = (uint64_t*)mmap(NULL, sizeof(uint64_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
 		if(sm_for_enabled_tag == MAP_FAILED) {
-			fprintf(stderr, "error: mmap() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
+			fprintf(stderr, "mmap() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
 			close(fd);
 			return false;
 		}
@@ -616,7 +620,7 @@ static bool setTagsProperty(uint64_t tags)
 		}
 		sm_for_enabled_tag = (uint64_t*)mmap(NULL, sizeof(uint64_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 		if(sm_for_enabled_tag == MAP_FAILED) {
-			fprintf(stderr, "error: mmap() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
+			fprintf(stderr, "mmap() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
 			close(fd);
 			return false;
 		}
@@ -1198,7 +1202,7 @@ int main(int argc, char **argv)
                     listSupportedCategories();
                     exit(0);
                 } else if (!strcmp(long_options[option_index].name, "init_exec")) {
-                    fprintf(stderr, "init_exec\n");
+                    fprintf(stderr, "[Info] Initailize T-trace\n");
                     g_init_exec = true;
                     setTagsProperty(0);
                     exit(0);

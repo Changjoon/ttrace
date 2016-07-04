@@ -52,6 +52,11 @@
 
 #define MAX_TRACE_LEN 1024
 #define MAX_LEN 512
+#define MAX_TAIL_LEN 13
+#define MAX_HEAD_LEN 8
+#define POS_LABEL_ST (MAX_LEN - MAX_HEAD_LEN)
+#define POS_LABEL_ED (MAX_LEN - MAX_TAIL_LEN)
+
 #define FD_INITIAL_VALUE -1
 #define TRACE_FILE_NOT_EXIST -2
 
@@ -131,15 +136,17 @@ void traceBegin(uint64_t tag, const char *name, ...)
 {
 	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
 		char buf[MAX_LEN];
-		int len = 0, ret = 0;
+		int len = MAX_HEAD_LEN, ret = 0;
 		va_list ap;
 
 		TTRACE_LOG("traceBegin:: write >> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
 
 		va_start(ap, name);
-		len = snprintf(buf, MAX_LEN, "B|%d|", getpid());
-		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
+		snprintf(buf, MAX_LEN, "B|%5d|", getpid());
+		len += vsnprintf(buf + MAX_HEAD_LEN, POS_LABEL_ST, name, ap);
 		va_end(ap);
+		
+		if (len > MAX_LEN) len = MAX_LEN - 1;
 
 		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(buf, len);
 		else 		ret = write(g_trace_handle_fd, buf, len);
@@ -181,19 +188,26 @@ void traceEnd(uint64_t tag)
  * - cookie: an unique identifier for distinguishing simultaneous events.
  * The name and cookie used to begin an event must be used to end it.
  */
-void traceAsyncBegin(uint64_t tag, int cookie, const char *name, ...)
+void traceAsyncBegin(uint64_t tag, int32_t cookie, const char *name, ...)
 {
 	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
 		char buf[MAX_LEN];
-		int len = 0, ret = 0;
+		int len = MAX_HEAD_LEN, ret = 0;
 		va_list ap;
 
 		TTRACE_LOG("traceAsyncBegin:: write >> tag: %u tag_bit: %u cookie: %d", tag, *cur_enabled_tag, cookie);
 		va_start(ap, name);
-		len = snprintf(buf, MAX_LEN, "S|%d|", getpid());
-		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
-		len += snprintf(buf + len, MAX_LEN - len, "|%d", cookie);
+		snprintf(buf, MAX_LEN, "S|%5d|", getpid());
+		len += vsnprintf(buf + MAX_HEAD_LEN, POS_LABEL_ST, name, ap);
 		va_end(ap);
+
+		if (len + MAX_TAIL_LEN < MAX_LEN) {
+			len += snprintf(buf + len, MAX_LEN - len, "|%d", cookie);
+		}
+		else {
+			snprintf(buf + POS_LABEL_ED, MAX_TAIL_LEN, "|%d", cookie);
+			len = MAX_LEN - 1;
+		}
 
 		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(buf, len);
 		else	ret = write(g_trace_handle_fd, buf, len);
@@ -208,19 +222,27 @@ void traceAsyncBegin(uint64_t tag, int cookie, const char *name, ...)
 #endif
 }
 
-void traceAsyncEnd(uint64_t tag, int cookie, const char *name, ...)
+void traceAsyncEnd(uint64_t tag, int32_t cookie, const char *name, ...)
 {
 	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
 		char buf[MAX_LEN];
-		int len = 0, ret = 0;
+		int len = MAX_HEAD_LEN, ret = 0;
 		va_list ap;
 
 		TTRACE_LOG("traceAsyncEnd:: write>> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
 		va_start(ap, name);
-		len = snprintf(buf, MAX_LEN, "F|%d|", getpid());
-		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
-		len += snprintf(buf + len, MAX_LEN - len, "|%d", cookie);
+		snprintf(buf, MAX_LEN, "F|%5d|", getpid());
+		len += vsnprintf(buf + MAX_HEAD_LEN, POS_LABEL_ST, name, ap);
 		va_end(ap);
+
+		if (len + MAX_TAIL_LEN < MAX_LEN) {
+			len += snprintf(buf + len, MAX_LEN - len, "|%d", cookie);
+		}
+		else {
+			snprintf(buf + POS_LABEL_ED, MAX_TAIL_LEN, "|%d", cookie);
+			len = MAX_LEN - 1;
+		}
+
 
 		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(buf, len);
 		else	ret = write(g_trace_handle_fd, buf, len);
@@ -245,14 +267,16 @@ void traceMark(uint64_t tag, const char *name, ...)
 {
 	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
 		char buf[MAX_LEN], end = 'E';
-		int len = 0, ret = 0;
+		int len = MAX_HEAD_LEN, ret = 0;
 		va_list ap;
 
 		TTRACE_LOG("traceMark:: write >> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
 		va_start(ap, name);
-		len = snprintf(buf, MAX_LEN, "B|%d|", getpid());
-		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
+		snprintf(buf, MAX_LEN, "B|%5d|", getpid());
+		len += vsnprintf(buf + MAX_HEAD_LEN, POS_LABEL_ST, name, ap);
 		va_end(ap);
+
+		if (len > MAX_LEN) len = MAX_LEN - 1;
 
 		if (g_extension_state == EXT_ACTIVATED) ttrace_extension_write(buf, len);
 		else	ret = write(g_trace_handle_fd, buf, len);
@@ -280,19 +304,26 @@ void traceMark(uint64_t tag, const char *name, ...)
  * - name: the event name
  * - value: the value tracing
  */
-void traceCounter(uint64_t tag, int value, const char *name, ...)
+void traceCounter(uint64_t tag, int32_t value, const char *name, ...)
 {
 	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
 		char buf[MAX_LEN];
-		int len = 0, ret = 0;
+		int len = MAX_HEAD_LEN, ret = 0;
 		va_list ap;
 
 		va_start(ap, name);
 
-		len = snprintf(buf, MAX_LEN, "C|%d|", getpid());
-		len += vsnprintf(buf + len, MAX_LEN - len, name, ap);
-		len += snprintf(buf + len, MAX_LEN - len, "|%d", value);
+		snprintf(buf, MAX_LEN, "C|%5d|", getpid());
+		len += vsnprintf(buf + MAX_HEAD_LEN, POS_LABEL_ST, name, ap);
 		va_end(ap);
+
+		if (len + MAX_TAIL_LEN < MAX_LEN) {
+			len += snprintf(buf + len, MAX_LEN - len, "|%d", value);
+		}
+		else {
+			snprintf(buf + POS_LABEL_ED, MAX_TAIL_LEN, "|%d", value);
+			len = MAX_LEN - 1;
+		}
 
 		if (g_extension_state == EXT_ACTIVATED) ttrace_extension_write(buf, len);
 		else	ret = write(g_trace_handle_fd, buf, len);
@@ -314,10 +345,10 @@ void traceBegin(uint64_t tag, const char *name, ...)
 void traceEnd(uint64_t tag)
 {; }
 
-void traceAsyncBegin(uint64_t tag, int cookie, const char *name, ...)
+void traceAsyncBegin(uint64_t tag, int32_t cookie, const char *name, ...)
 {; }
 
-void traceAsyncEnd(uint64_t tag, int cookie, const char *name, ...)
+void traceAsyncEnd(uint64_t tag, int32_t cookie, const char *name, ...)
 {; }
 
 void traceMark(uint64_t tag, const char *name, ...)
