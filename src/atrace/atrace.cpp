@@ -758,6 +758,12 @@ static bool setKernelTraceFuncs(const char* funcs)
     return ok;
 }
 
+// Enable tracing in the kernel.
+static bool startTrace()
+{
+    return setTracingEnabled(true);
+}
+
 // Set all the kernel tracing settings to the desired state for this trace
 // capture.
 static bool setUpTrace()
@@ -779,7 +785,6 @@ static bool setUpTrace()
 #endif
     ok &= setPrintTgidEnableIfPresent(true);
 
-
     // Set up the tags property.
     uint64_t tags = 0;
 #ifdef DEVICE_TYPE_TIZEN
@@ -795,6 +800,13 @@ static bool setUpTrace()
 #ifdef DEVICE_TYPE_TIZEN
     if (tags == 0) tags |= TTRACE_TAG_ALWAYS;
 }
+    ok &= startTrace();
+	if(!g_append_trace) {
+		// For debug
+		// printf("\nclear the trace\n");
+		//
+	    ok &= clearTrace();
+	}
 #endif
     ok &= setTagsProperty(tags);
     ok &= setAppCmdlineProperty(g_debugAppCmdLine);
@@ -833,7 +845,9 @@ static void cleanUpTrace()
     disableKernelTraceEvents();
 
     // Reset the system properties.
+#ifndef DEVICE_TYPE_TIZEN
     setTagsProperty(0);
+#endif
     setAppCmdlineProperty("");
     pokeBinderServices();
 
@@ -845,16 +859,12 @@ static void cleanUpTrace()
     setKernelTraceFuncs(NULL);
 }
 
-
-// Enable tracing in the kernel.
-static bool startTrace()
-{
-    return setTracingEnabled(true);
-}
-
 // Disable tracing in the kernel.
 static void stopTrace()
 {
+#ifdef DEVICE_TYPE_TIZEN
+    setTagsProperty(0);
+#endif
     setTracingEnabled(false);
 }
 
@@ -1234,17 +1244,18 @@ int main(int argc, char **argv)
 #ifdef DEVICE_TYPE_TIZEN
     if(traceStart && g_backup_trace) {
 //before start tracing by atrace, backup existig traces
-	stopTrace();
+		stopTrace();
     	dumpTrace(true);
     }
 #endif
     if (!(async && !g_traceOverwrite)) {
 	    ok &= setUpTrace();
     }
+#ifndef DEVICE_TYPE_TIZEN
     ok &= startTrace();
-
+#endif
     if (ok && traceStart) {
-    		// For debug
+    	// For debug
         // printf("capturing trace...");
         //
         fflush(stdout);
@@ -1254,13 +1265,14 @@ int main(int argc, char **argv)
         // contain entries from only one CPU can cause "begin" entries without a
         // matching "end" entry to show up if a task gets migrated from one CPU to
         // another.
-	if(!g_append_trace) {
+#ifndef DEVICE_TYPE_TIZEN
+		if(!g_append_trace) {
 		// For debug
 		// printf("\nclear the trace\n");
 		//
 	        ok = clearTrace();
-	}
-
+		}
+#endif
         if (ok && !async) {
             // Sleep to allow the trace to be captured.
             struct timespec timeLeft;
@@ -1283,7 +1295,7 @@ int main(int argc, char **argv)
             printf(" done\nTRACE:\n");
             fflush(stdout);
 #ifdef DEVICE_TYPE_TIZEN
-	    dumpTrace(false);
+	    	dumpTrace(false);
 #else
             dumpTrace();
 #endif
