@@ -6,7 +6,7 @@ After=sys-kernel-debug.mount
 [Service]
 Type=simple
 ExecStart=/usr/bin/atrace --init_exec
-SmackProcessLabel=ttrace
+SmackProcessLabel=System
 
 [Install]
 WantedBy=sys-kernel-debug.mount
