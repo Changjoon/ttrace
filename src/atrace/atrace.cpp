@@ -26,6 +26,7 @@
 #include <sys/sendfile.h>
 #include <time.h>
 #include <zlib.h>
+#include <pwd.h>
 
 #ifdef DEVICE_TYPE_TIZEN
 #include <stdint.h>
@@ -81,30 +82,30 @@ typedef enum {
 } commonNodeIdx;
 
 static const CommonNode commonNodes[] = {
-	{	ENABLED_TAG_FILE,		0664	},
-	{	"/sys/kernel/debug",							0755	},
-	{	"/sys/kernel/debug/tracing",					0755	},
-	{	"/sys/kernel/debug/tracing/trace_marker",		0222	},
-	{	"/sys/kernel/debug/tracing/trace_clock",		0666	},
-	{	"/sys/kernel/debug/tracing/buffer_size_kb",		0666	},
-	{	"/sys/kernel/debug/tracing/current_tracer",		0666	},
-	{	"/sys/kernel/debug/tracing/tracing_on",			0666	},
-	{	"/sys/kernel/debug/tracing/trace",				0666	},
-	{	"/sys/kernel/debug/tracing/options/overwrite",	0666	},
-	{	"/sys/kernel/debug/tracing/options/print-tgid",	0666	},
-    {	"/sys/kernel/debug/tracing/events/sched/sched_switch/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/sched/sched_wakeup/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/power/cpu_frequency/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/memory_bus/enable",			0666 },
-    {	"/sys/kernel/debug/tracing/events/power/cpu_idle/enable",		0666 },
-    {	"/sys/kernel/debug/tracing/events/ext4/ext4_sync_file_enter/enable",	0666	},
-    {	"/sys/kernel/debug/tracing/events/ext4/ext4_sync_file_exit/enable",		0666	},
-    {	"/sys/kernel/debug/tracing/events/block/block_rq_issue/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/block/block_rq_complete/enable",	0666	},
-    {	"/sys/kernel/debug/tracing/events/mmc/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/cpufreq_interactive/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/sync/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/workqueue/enable",	0666 },
+    {	ENABLED_TAG_FILE,                                                   0666},
+    {	"/sys/kernel/debug",                                                0755},
+    {	"/sys/kernel/debug/tracing",                                        0755},
+    {	"/sys/kernel/debug/tracing/trace_marker",                           0222},
+    {	"/sys/kernel/debug/tracing/trace_clock",                            0666},
+    {	"/sys/kernel/debug/tracing/buffer_size_kb",                         0666},
+    {	"/sys/kernel/debug/tracing/current_tracer",                         0666},
+    {	"/sys/kernel/debug/tracing/tracing_on",                             0666},
+    {	"/sys/kernel/debug/tracing/trace",                                  0666},
+    {	"/sys/kernel/debug/tracing/options/overwrite",                      0666},
+    {	"/sys/kernel/debug/tracing/options/print-tgid",                     0666},
+    {	"/sys/kernel/debug/tracing/events/sched/sched_switch/enable",       0666},
+    {	"/sys/kernel/debug/tracing/events/sched/sched_wakeup/enable",       0666},
+    {	"/sys/kernel/debug/tracing/events/power/cpu_frequency/enable",      0666},
+    {	"/sys/kernel/debug/tracing/events/memory_bus/enable",               0666},
+    {	"/sys/kernel/debug/tracing/events/power/cpu_idle/enable",           0666},
+    {	"/sys/kernel/debug/tracing/events/ext4/ext4_sync_file_enter/enable",0666},
+    {	"/sys/kernel/debug/tracing/events/ext4/ext4_sync_file_exit/enable", 0666},
+    {	"/sys/kernel/debug/tracing/events/block/block_rq_issue/enable",     0666},
+    {	"/sys/kernel/debug/tracing/events/block/block_rq_complete/enable",  0666},
+    {	"/sys/kernel/debug/tracing/events/mmc/enable",                      0666},
+    {	"/sys/kernel/debug/tracing/events/cpufreq_interactive/enable",      0666},
+    {	"/sys/kernel/debug/tracing/events/sync/enable",                     0666},
+    {	"/sys/kernel/debug/tracing/events/workqueue/enable",                0666},
 };
 
 struct TracingCategory {
@@ -222,12 +223,16 @@ static bool g_init_exec = false;
 static bool g_append_trace = false;
 static bool g_backup_trace = false;
 static struct group group_dev;
+static struct passwd passwd_dev;
 #if TTRACE_TIZEN_VERSION_MAJOR < 3
+#define TTRACE_USER_NAME	"root"
 #define TTRACE_GROUP_NAME	"developer"
 #else
-#define TTRACE_GROUP_NAME	"users"
+#define TTRACE_USER_NAME	"system_fw"
+#define TTRACE_GROUP_NAME	"system_fw"
 #endif
 static struct group* group_ptr;
+static struct passwd* passwd_ptr;
 
 #endif
 
@@ -283,7 +288,7 @@ static bool fileIsWritable(const char* filename) {
 
 static bool setFilePermission (const char *path, const mode_t perms) {
 	//fprintf(stderr, "path: %s, perms: %d, gid: %d\n", path,perms, group_dev.gr_gid);
-	if (0 > chown(path, 0, group_dev.gr_gid)) return false;
+	if (0 > chown(path, passwd_dev.pw_uid, group_dev.gr_gid)) return false;
 	if (0 > chmod(path, perms)) return false;
 	if (0 > smack_setlabel(path, "*", SMACK_LABEL_ACCESS)) return false;
 
@@ -511,11 +516,13 @@ static bool setTagsProperty(uint64_t tags)
 		size_t bufSize = DEF_GR_SIZE;
 		char buf[DEF_GR_SIZE];
 		int ret = 0;
+        bool isInvalid = false;
 
 		if(fileExists(ENABLED_TAG_FILE)) {
 			fprintf(stderr, "[Info] T-trace has been already initailized\n");
 			return false; //atrace has been already initailized.
 		}
+
 		ret = getgrnam_r(TTRACE_GROUP_NAME, &group_dev, buf, bufSize, &group_ptr);
 
 		if (ret != 0 && ret != ERANGE)
@@ -523,8 +530,8 @@ static bool setTagsProperty(uint64_t tags)
 			fprintf(stderr, "Fail to group[%s] info: %s(%d)\n", TTRACE_GROUP_NAME, strerror_r(errno, str_error, sizeof(str_error)), errno);
 			return false;
 		}
-		
-		bool isInvalid = false;
+
+		isInvalid = false;
 		while(ret == ERANGE)
 		{
 			long int tmpSize = -1;
@@ -532,7 +539,7 @@ static bool setTagsProperty(uint64_t tags)
 			if(!isInvalid)
 				tmpSize = sysconf(_SC_GETGR_R_SIZE_MAX);
 
-			if (tmpSize == -1) 
+			if (tmpSize == -1)
 			{
 				bufSize *= 2;
 			}
@@ -548,7 +555,41 @@ static bool setTagsProperty(uint64_t tags)
 			if(ret == ERANGE) isInvalid = true;
 			free(dynbuf);
 		}
-		fd = open("/tmp/tmp_tag", O_CREAT | O_RDWR | O_CLOEXEC, 0666);				
+
+		ret = getpwnam_r(TTRACE_USER_NAME, &passwd_dev, buf, bufSize, &passwd_ptr);
+
+		if (ret != 0 && ret != ERANGE)
+		{
+			fprintf(stderr, "Fail to group[%s] info: %s(%d)\n", TTRACE_USER_NAME, strerror_r(errno, str_error, sizeof(str_error)), errno);
+			return false;
+		}
+		
+		isInvalid = false;
+		while(ret == ERANGE)
+		{
+			long int tmpSize = -1;
+
+			if(!isInvalid)
+				tmpSize = sysconf(_SC_GETGR_R_SIZE_MAX);
+
+			if (tmpSize == -1)
+			{
+				bufSize *= 2;
+			}
+			else bufSize = (size_t) tmpSize;
+
+			char *dynbuf = (char *) malloc(bufSize);
+			if(dynbuf == NULL)
+			{
+				fprintf(stderr, "Fail to allocate buffer for group[%s]: %s(%d)\n", TTRACE_GROUP_NAME, strerror_r(errno, str_error, sizeof(str_error)), errno);
+				return false;
+			}
+			ret = getpwnam_r(TTRACE_USER_NAME, &passwd_dev, dynbuf, bufSize, &passwd_ptr);
+			if(ret == ERANGE) isInvalid = true;
+			free(dynbuf);
+		}
+
+		fd = open("/tmp/tmp_tag", O_CREAT | O_RDWR | O_CLOEXEC, 0666);
 		if(fd < 0){
 			fprintf(stderr, "Fail to open enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
 			return false;
@@ -613,7 +654,7 @@ static bool setTagsProperty(uint64_t tags)
 	}
 //atrace normal mode
 	else {
-		fd = open(ENABLED_TAG_FILE, O_RDWR | O_CLOEXEC, 0666);		
+		fd = open(ENABLED_TAG_FILE, O_RDWR | O_CLOEXEC, 0666);
 		if(fd < 0){
 			fprintf(stderr, "Fail to open enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
 			return false;

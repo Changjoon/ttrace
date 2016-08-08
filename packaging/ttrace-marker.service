@@ -4,6 +4,8 @@ DefaultDependencies=no
 After=sys-kernel-debug.mount
 
 [Service]
+User=system_fw
+Group=system_fw
 Type=simple
 ExecStart=/usr/bin/atrace --init_exec
 SmackProcessLabel=System
