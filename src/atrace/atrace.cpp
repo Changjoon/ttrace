@@ -199,6 +199,7 @@ static const TracingCategory k_categories[] = {
 #ifdef TTRACE_PROFILE_MOBILE
 #elif defined TTRACE_PROFILE_TV
     { "system",       "System",        	TTRACE_TAG_SYSTEM, { } },
+    { "debug",       "For extra debugging purpose",	TTRACE_TAG_DEBUG, { } },
 #elif defined TTRACE_PROFILE_WEARABLE
 #endif
 };
