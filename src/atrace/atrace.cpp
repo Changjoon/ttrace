@@ -230,6 +230,9 @@ static struct group group_dev;
 #endif
 static struct group* group_ptr;
 
+/* Save excluded tags list */
+uint64_t excludedTags;
+
 #endif
 
 /* Sys file paths */
@@ -792,15 +795,27 @@ static bool setUpTrace()
     if (g_categoryEnables[TAG_NONE_IDX]) tags = TTRACE_TAG_NEVER;
     else {
 #endif
-    for (int i = 0; i < NELEM(k_categories); i++) {
-        if (g_categoryEnables[i]) {
-            const TracingCategory &c = k_categories[i];
-            tags |= c.tags;
-        }
-    }
+	for (int i = 0; i < NELEM(k_categories); i++) {
+	    if (g_categoryEnables[i]) {
+		const TracingCategory &c = k_categories[i];
+		if ((c.tags & excludedTags) == 0)
+		    tags |= c.tags;
+	    }
+	}
 #ifdef DEVICE_TYPE_TIZEN
-    if (tags == 0) tags |= TTRACE_TAG_ALWAYS;
-}
+	if (tags == 0 && excludedTags == 0) {
+	    tags |= TTRACE_TAG_ALWAYS;
+	}
+	else if (tags == 0 && excludedTags != 0) {
+	    excludedTags |= TTRACE_TAG_ALWAYS;
+	    tags |= ~excludedTags;
+	}
+	else {
+	    excludedTags |= TTRACE_TAG_ALWAYS;
+	    tags &= ~excludedTags;
+	}
+	printf("Tags: 0x%llx, excludedTags: 0x%llx\n", tags, excludedTags);
+    }
     ok &= startTrace();
 	if(!g_append_trace) {
 		// For debug
@@ -1095,6 +1110,8 @@ static void showHelp(const char *cmd)
 #endif
                     "  -b N            use a trace buffer size of N KB\n"
                     "  -c              trace into a circular buffer\n"
+                    "  -e category     specify a category to exclude [default None]\n"
+                    "                   example, $ atrace -e wm -e am -e gfx\n"
                     "  -k fname,...    trace the listed kernel functions\n"
                     "  -n              ignore signals\n"
                     "  -s N            sleep for N seconds before tracing [default 0]\n"
@@ -1119,6 +1136,7 @@ int main(int argc, char **argv)
     bool traceStart = true;
     bool traceStop = true;
     bool traceDump = true;
+    excludedTags = 0ULL;
 
     if (argc == 2 && 0 == strcmp(argv[1], "--help")) {
         showHelp(argv[0]);
@@ -1144,8 +1162,8 @@ int main(int argc, char **argv)
         ret = getopt_long(argc, argv, "a:b:ck:ns:t:z:p",
                           long_options, &option_index);
 #else
-		ret = getopt_long(argc, argv, "b:ck:ns:t:z",
-                          long_options, &option_index);
+	ret = getopt_long(argc, argv, "b:ck:e:ns:t:z",
+			long_options, &option_index);
 #endif
         if (ret < 0) {
             for (int i = optind; i < argc; i++) {
@@ -1169,6 +1187,16 @@ int main(int argc, char **argv)
             case 'c':
                 g_traceOverwrite = true;
             break;
+
+	    case 'e':
+		setCategoryEnable(optarg, true);
+		for (int i = 0; i < NELEM(k_categories); i++) {
+		    const TracingCategory &c = k_categories[i];
+		    if (!strcmp(c.name, optarg)) {
+			excludedTags |= c.tags;
+		    }
+		}
+	    break;
 
             case 'k':
                 g_kernelTraceFuncs = optarg;
