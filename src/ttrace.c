@@ -1,27 +1,20 @@
 /*
- * =============================================================================
+ * T-trace
+ * Copyright (c) 2014 Samsung Electronics Co., Ltd All Rights Reserved
  *
- * SLP
- * Copyright (c) 2012 Samsung Electronics, Inc.
- * All rights reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This software is a confidential and proprietary information
- * of Samsung Electronics, Inc. ("Confidential Information").  You
- * shall not disclose such Confidential Information and shall use
- * it only in accordance with the terms of the license agreement
- * you entered into with Samsung Electronics.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * @file:  ttrace.c
- * @brief:  ttrace
- * @author:  @samsung.com
- * @created:  Thursday 27 September 2012 08:05:23  KST
- * @compiler:  gcc
- * @company:  Samsung
- * @version:  0.1
- * @revision:  none
- *
- * =============================================================================
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
+
 #include "ttrace.h"
 #include "trace.h"
 #include "dlog.h"
