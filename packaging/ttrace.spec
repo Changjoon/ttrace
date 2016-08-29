@@ -17,6 +17,7 @@ BuildRequires: cmake
 
 %define keepstatic 1
 
+# tizen_profile_name is for optional features that are not built in Tizen Public OBS.
 %define TTRACE_PROFILE none
 %if "%{?tizen_profile_name}" == "mobile"
 %define TTRACE_PROFILE mobile
