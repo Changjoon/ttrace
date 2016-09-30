@@ -33,6 +33,7 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/smack.h>
+#include <linux/xattr.h>
 #include <unistd.h>
 #include "ttrace.h"
 #define TTRACE_TAG_NONE		9999
@@ -255,7 +256,7 @@ static bool setFilePermission (const char *path, const mode_t perms) {
 	//fprintf(stderr, "path: %s, perms: %d, gid: %d\n", path,perms, group_dev.gr_gid);
 	if (0 > chown(path, 0, group_dev.gr_gid)) return false;
 	if (0 > chmod(path, perms)) return false;
-	if (0 > smack_setlabel(path, "*", SMACK_LABEL_ACCESS)) return false;
+	if (0 > smack_set_label_for_path(path, XATTR_NAME_SMACK, false, "*")) return false;
 
 	return true;
 }
