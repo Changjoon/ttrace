@@ -127,6 +127,16 @@ static inline uint64_t isTagEnabled(uint64_t cur_tag)
 	return (cur_tag & *cur_enabled_tag);
 }
 
+int check_params(int fd, char* buf, int len, const char* func)
+{
+	if (fd <= 0 || buf == NULL || len < 0) {
+		fprintf(stderr, "Currupted arguments, fd: %d, buf: %p, len: %d at %s.\n",
+				fd, buf, len, func);
+		return -1;
+	}
+	return 0;
+}
+
 /*
  * Tracing API for synchronous events: traceBegin()/traceEnd()
  * - tag: the tracing tag
@@ -148,11 +158,15 @@ void traceBegin(uint64_t tag, const char *name, ...)
 		
 		if (len > MAX_LEN) len = MAX_LEN - 1;
 
+		if (check_params(g_trace_handle_fd, buf, len, __func__) < 0)
+			return;
+
 		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(buf, len);
 		else 		ret = write(g_trace_handle_fd, buf, len);
 #ifdef TTRACE_DEBUG
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceBegin.\n", len, ret, errno);
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceBegin.\n",
+					len, ret, errno);
 #endif
 	}
 #ifdef TTRACE_DEBUG	
@@ -166,14 +180,19 @@ void traceEnd(uint64_t tag)
 {
 	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
 		int ret = 0;
+		int len = 1;
 		char end = 'E';
 		TTRACE_LOG("traceEnd:: write>> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
 
-		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write("E", 1);
-		else 		ret = write(g_trace_handle_fd, &end, 1);
+		if (check_params(g_trace_handle_fd, &end, len, __func__) < 0)
+			return;
+
+		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(&end, len);
+		else 		ret = write(g_trace_handle_fd, &end, len);
 #ifdef TTRACE_DEBUG
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceEnd.\n", 1, ret, errno);
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceEnd.\n",
+					len, ret, errno);
 #endif
 	}
 #ifdef TTRACE_DEBUG
@@ -211,11 +230,15 @@ void traceAsyncBegin(uint64_t tag, int32_t cookie, const char *name, ...)
 			len = MAX_LEN - 1;
 		}
 
+		if (check_params(g_trace_handle_fd, buf, len, __func__) < 0)
+			return;
+
 		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(buf, len);
 		else	ret = write(g_trace_handle_fd, buf, len);
 #ifdef TTRACE_DEBUG
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceAsyncBegin.\n", len, ret, errno);
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceAsyncBegin.\n",
+					len, ret, errno);
 #endif
 	}
 #ifdef TTRACE_DEBUG
@@ -246,12 +269,15 @@ void traceAsyncEnd(uint64_t tag, int32_t cookie, const char *name, ...)
 			len = MAX_LEN - 1;
 		}
 
+		if (check_params(g_trace_handle_fd, buf, len, __func__) < 0)
+			return;
 
 		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(buf, len);
 		else	ret = write(g_trace_handle_fd, buf, len);
 #ifdef TTRACE_DEBUG
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceAsyncEnd.\n", len, ret, errno);
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceAsyncEnd.\n",
+					len, ret, errno);
 #endif
 	}
 #ifdef TTRACE_DEBUG
@@ -282,19 +308,27 @@ void traceMark(uint64_t tag, const char *name, ...)
 
 		if (len > MAX_LEN) len = MAX_LEN - 1;
 
+		if (check_params(g_trace_handle_fd, buf, len, __func__) < 0)
+			return;
+
 		if (g_extension_state == EXT_ACTIVATED) ttrace_extension_write(buf, len);
 		else	ret = write(g_trace_handle_fd, buf, len);
 
 #ifdef TTRACE_DEBUG
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceMark.\n", len, ret, errno);
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceMark.\n",
+					len, ret, errno);
 #endif
+		len = 1;
+		if (check_params(g_trace_handle_fd, &end, len, __func__) < 0)
+			return;
 
-		if (g_extension_state == EXT_ACTIVATED) ttrace_extension_write("E", 1);
-		else	ret = write(g_trace_handle_fd, &end, 1);
+		if (g_extension_state == EXT_ACTIVATED) ttrace_extension_write(&end, len);
+		else	ret = write(g_trace_handle_fd, &end, len);
 #ifdef TTRACE_DEBUG
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceMark.\n", 1, ret, errno);
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceMark.\n",
+					len, ret, errno);
 #endif
 	}
 #ifdef TTRACE_DEBUG
@@ -332,11 +366,15 @@ void traceCounter(uint64_t tag, int32_t value, const char *name, ...)
 			len = MAX_LEN - 1;
 		}
 
+		if (check_params(g_trace_handle_fd, buf, len, __func__) < 0)
+			return;
+
 		if (g_extension_state == EXT_ACTIVATED) ttrace_extension_write(buf, len);
 		else	ret = write(g_trace_handle_fd, buf, len);
 #ifdef TTRACE_DEBUG
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceCounter.\n", len, ret, errno);
+			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceCounter.\n",
+					len, ret, errno);
 #endif
 	}
 #ifdef TTRACE_DEBUG
