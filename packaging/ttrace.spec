@@ -12,7 +12,6 @@ BuildRequires: pkgconfig(dlog)
 BuildRequires: pkgconfig(zlib)
 BuildRequires: pkgconfig(capi-base-common)
 BuildRequires: pkgconfig(libsmack)
-BuildRequires: pkgconfig(ttrace-extension-static)
 BuildRequires: cmake
 
 %define keepstatic 1

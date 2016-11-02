@@ -18,7 +18,6 @@
 #include "ttrace.h"
 #include "trace.h"
 #include "dlog.h"
-#include "ttrace-extension.h"
 
 #define ENABLE_TTRACE
 
@@ -53,12 +52,8 @@
 #define FD_INITIAL_VALUE -1
 #define TRACE_FILE_NOT_EXIST -2
 
-#define EXT_DEACTIVATED 0
-#define EXT_ACTIVATED 1
-
 int g_trace_handle_fd = FD_INITIAL_VALUE;
 int g_enabled_tag_fd = FD_INITIAL_VALUE;
-int g_extension_state = EXT_DEACTIVATED;
 
 static uint64_t dummy = 0;
 uint64_t *cur_enabled_tag = (void *)&dummy;
@@ -68,7 +63,6 @@ static uint64_t traceInit()
 	uint64_t *sm_for_enabled_tag;
 	TTRACE_LOG("traceInit: %p %p", cur_enabled_tag, ((void *)&dummy));
 
-	g_extension_state = EXT_ACTIVATED;
 	if (cur_enabled_tag == ((void *)&dummy)) {
 		g_enabled_tag_fd = open(ENABLED_TAG_FILE, O_RDONLY | O_CLOEXEC);
 		if (g_enabled_tag_fd < 0) {
@@ -102,8 +96,6 @@ static uint64_t traceInit()
 	}
 	TTRACE_LOG("traceInit:: cur_enabled_tag >> %u", *cur_enabled_tag);
 
-	/* ttrace is ready. deactive g_extension_state */
-	g_extension_state = EXT_DEACTIVATED;
 	return *cur_enabled_tag;
 }
 
@@ -123,7 +115,7 @@ static inline uint64_t isTagEnabled(uint64_t cur_tag)
 int check_params(int fd, char* buf, int len, const char* func)
 {
 	if (fd <= 0 || buf == NULL || len < 0) {
-		fprintf(stderr, "Currupted arguments, fd: %d, buf: %p, len: %d at %s.\n",
+		TTRACE_LOG("Currupted arguments, fd: %d, buf: %p, len: %d at %s.\n",
 				fd, buf, len, func);
 		return -1;
 	}
@@ -137,7 +129,7 @@ int check_params(int fd, char* buf, int len, const char* func)
  */
 void traceBegin(uint64_t tag, const char *name, ...)
 {
-	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
+	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN];
 		int len = MAX_HEAD_LEN, ret = 0;
 		va_list ap;
@@ -148,30 +140,24 @@ void traceBegin(uint64_t tag, const char *name, ...)
 		snprintf(buf, MAX_LEN, "B|%5d|", getpid());
 		len += vsnprintf(buf + MAX_HEAD_LEN, POS_LABEL_ST, name, ap);
 		va_end(ap);
-		
+
 		if (len > MAX_LEN) len = MAX_LEN - 1;
 
 		if (check_params(g_trace_handle_fd, buf, len, __func__) < 0)
 			return;
 
-		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(buf, len);
-		else 		ret = write(g_trace_handle_fd, buf, len);
-#ifdef TTRACE_DEBUG
+		ret = write(g_trace_handle_fd, buf, len);
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceBegin.\n",
+			TTRACE_LOG("error writing, len: %d, ret: %d, errno: %d at traceBegin.\n",
 					len, ret, errno);
-#endif
 	}
-#ifdef TTRACE_DEBUG	
-	else {
+	else
 		TTRACE_LOG("traceBegin:: disabled tag >> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
-
-#endif
 }
 
 void traceEnd(uint64_t tag)
 {
-	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
+	if (isTagEnabled(tag)) {
 		int ret = 0;
 		int len = 1;
 		char end = 'E';
@@ -180,19 +166,13 @@ void traceEnd(uint64_t tag)
 		if (check_params(g_trace_handle_fd, &end, len, __func__) < 0)
 			return;
 
-		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(&end, len);
-		else 		ret = write(g_trace_handle_fd, &end, len);
-#ifdef TTRACE_DEBUG
+		ret = write(g_trace_handle_fd, &end, len);
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceEnd.\n",
+			TTRACE_LOG("error writing, len: %d, ret: %d, errno: %d at traceEnd.\n",
 					len, ret, errno);
-#endif
 	}
-#ifdef TTRACE_DEBUG
 	else
 		TTRACE_LOG("traceEnd:: disabled tag >> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
-
-#endif
 }
 
 /*
@@ -204,7 +184,7 @@ void traceEnd(uint64_t tag)
  */
 void traceAsyncBegin(uint64_t tag, int32_t cookie, const char *name, ...)
 {
-	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
+	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN];
 		int len = MAX_HEAD_LEN, ret = 0;
 		va_list ap;
@@ -226,24 +206,18 @@ void traceAsyncBegin(uint64_t tag, int32_t cookie, const char *name, ...)
 		if (check_params(g_trace_handle_fd, buf, len, __func__) < 0)
 			return;
 
-		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(buf, len);
-		else	ret = write(g_trace_handle_fd, buf, len);
-#ifdef TTRACE_DEBUG
+		ret = write(g_trace_handle_fd, buf, len);
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceAsyncBegin.\n",
+			TTRACE_LOG("error writing, len: %d, ret: %d, errno: %d at traceAsyncBegin.\n",
 					len, ret, errno);
-#endif
 	}
-#ifdef TTRACE_DEBUG
 	else
 		TTRACE_LOG("traceAsyncBegin:: disabled tag >> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
-
-#endif
 }
 
 void traceAsyncEnd(uint64_t tag, int32_t cookie, const char *name, ...)
 {
-	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
+	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN];
 		int len = MAX_HEAD_LEN, ret = 0;
 		va_list ap;
@@ -265,19 +239,13 @@ void traceAsyncEnd(uint64_t tag, int32_t cookie, const char *name, ...)
 		if (check_params(g_trace_handle_fd, buf, len, __func__) < 0)
 			return;
 
-		if (g_extension_state == EXT_ACTIVATED)	ttrace_extension_write(buf, len);
-		else	ret = write(g_trace_handle_fd, buf, len);
-#ifdef TTRACE_DEBUG
+		ret = write(g_trace_handle_fd, buf, len);
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceAsyncEnd.\n",
+			TTRACE_LOG("error writing, len: %d, ret: %d, errno: %d at traceAsyncEnd.\n",
 					len, ret, errno);
-#endif
 	}
-#ifdef TTRACE_DEBUG
 	else
 		TTRACE_LOG("traceAsyncEnd:: disabled tag >> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
-
-#endif
 }
 
 /*
@@ -288,7 +256,7 @@ void traceAsyncEnd(uint64_t tag, int32_t cookie, const char *name, ...)
 /* LCOV_EXCL_START */
 void traceMark(uint64_t tag, const char *name, ...)
 {
-	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
+	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN], end = 'E';
 		int len = MAX_HEAD_LEN, ret = 0;
 		va_list ap;
@@ -304,31 +272,21 @@ void traceMark(uint64_t tag, const char *name, ...)
 		if (check_params(g_trace_handle_fd, buf, len, __func__) < 0)
 			return;
 
-		if (g_extension_state == EXT_ACTIVATED) ttrace_extension_write(buf, len);
-		else	ret = write(g_trace_handle_fd, buf, len);
-
-#ifdef TTRACE_DEBUG
+		ret = write(g_trace_handle_fd, buf, len);
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceMark.\n",
+			TTRACE_LOG("error writing, len: %d, ret: %d, errno: %d at traceMark.\n",
 					len, ret, errno);
-#endif
 		len = 1;
 		if (check_params(g_trace_handle_fd, &end, len, __func__) < 0)
 			return;
 
-		if (g_extension_state == EXT_ACTIVATED) ttrace_extension_write(&end, len);
-		else	ret = write(g_trace_handle_fd, &end, len);
-#ifdef TTRACE_DEBUG
+		ret = write(g_trace_handle_fd, &end, len);
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceMark.\n",
+			TTRACE_LOG("error writing, len: %d, ret: %d, errno: %d at traceMark.\n",
 					len, ret, errno);
-#endif
 	}
-#ifdef TTRACE_DEBUG
 	else
 		TTRACE_LOG("traceMark:: disabled tag >> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
-
-#endif
 }
 
 /* LCOV_EXCL_STOP */
@@ -340,7 +298,7 @@ void traceMark(uint64_t tag, const char *name, ...)
  */
 void traceCounter(uint64_t tag, int32_t value, const char *name, ...)
 {
-	if (isTagEnabled(tag) || g_extension_state == EXT_ACTIVATED) { 
+	if (isTagEnabled(tag)) {
 		char buf[MAX_LEN];
 		int len = MAX_HEAD_LEN, ret = 0;
 		va_list ap;
@@ -362,19 +320,13 @@ void traceCounter(uint64_t tag, int32_t value, const char *name, ...)
 		if (check_params(g_trace_handle_fd, buf, len, __func__) < 0)
 			return;
 
-		if (g_extension_state == EXT_ACTIVATED) ttrace_extension_write(buf, len);
-		else	ret = write(g_trace_handle_fd, buf, len);
-#ifdef TTRACE_DEBUG
+		ret = write(g_trace_handle_fd, buf, len);
 		if (ret < 0)
-			fprintf(stderr, "error writing, len: %d, ret: %d, errno: %d at traceCounter.\n",
+			TTRACE_LOG("error writing, len: %d, ret: %d, errno: %d at traceCounter.\n",
 					len, ret, errno);
-#endif
 	}
-#ifdef TTRACE_DEBUG
 	else
 		TTRACE_LOG("traceCounter:: disabled tag");
-
-#endif
 }
 
 #else
