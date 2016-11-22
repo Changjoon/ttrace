@@ -1,6 +1,6 @@
 Name:		ttrace
 Summary:    T-trace for tizen
-Version:	1.0.0
+Version:	1.0.2
 Release:    1
 Group:      System/Libraries
 License:    Apache-2.0
