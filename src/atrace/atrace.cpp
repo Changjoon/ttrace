@@ -407,7 +407,7 @@ static bool setTracingEnabled(bool enable)
 }
 
 // Clear the contents of the kernel trace.
-static bool clearTrace()
+static bool clearKernelTrace()
 {
     return truncateFile(k_tracePath);
 }
@@ -671,18 +671,17 @@ static bool setUpTrace()
 	}
 	printf("Tags: 0x%llx, excludedTags: 0x%llx\n", tags, excludedTags);
     }
-    ok &= startTrace();
-	if(!g_append_trace) {
-		// For debug
-		// printf("\nclear the trace\n");
-		//
-	    ok &= clearTrace();
-	}
-    ok &= setTagsProperty(tags);
 
-    // Disable all the sysfs enables.  This is done as a separate loop from
-    // the enables to allow the same enable to exist in multiple categories.
-    ok &= disableKernelTraceEvents();
+    ok &= startTrace();
+    if(!g_append_trace) {
+        // Clear Kernel Trace
+        ok &= clearKernelTrace();
+
+        // Disable all the sysfs enables.  This is done as a separate loop from
+        // the enables to allow the same enable to exist in multiple categories.
+        ok &= disableKernelTraceEvents();
+    }
+    ok &= setTagsProperty(tags);
 
     // Enable all the sysfs enables that are in an enabled category.
     for (int i = 0; i < NELEM(k_categories); i++) {
@@ -932,7 +931,7 @@ static void showHelp(const char *cmd)
                     "  --async_dump    dump the current contents of circular trace buffer\n"
                     "  --async_stop    stop tracing and dump the current contents of circular\n"
                     "                    trace buffer\n"
-                    "  --append        append traces to the existing traces. do not clear the trace buffer\n"
+                    "  --append        append traces to the existing traces. do not clear the trace buffer\n and kernel trace events set"
 		    "  --backup        back up the existing traces to /tmp/trace.backup and then clear the trace buffer\n"
                     "  --list_categories\n"
                     "                  list the available tracing categories\n"
@@ -1113,7 +1112,7 @@ int main(int argc, char **argv)
             printf("\ntrace aborted.\n");
             fflush(stdout);
         }
-        clearTrace();
+        clearKernelTrace();
     } else if (!ok) {
         fprintf(stderr, "unable to start tracing\n");
     }
