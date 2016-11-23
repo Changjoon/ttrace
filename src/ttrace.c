@@ -52,11 +52,29 @@
 #define FD_INITIAL_VALUE -1
 #define TRACE_FILE_NOT_EXIST -2
 
+void __attribute__ ((constructor)) libttrace_init(void);
+void __attribute__ ((destructor)) libttrace_fini(void);
+
 int g_trace_handle_fd = FD_INITIAL_VALUE;
 int g_enabled_tag_fd = FD_INITIAL_VALUE;
 
 static uint64_t dummy = 0;
 uint64_t *cur_enabled_tag = (void *)&dummy;
+
+void libttrace_init()
+{
+	return;
+}
+
+void libttrace_fini()
+{
+	if (g_trace_handle_fd > FD_INITIAL_VALUE)
+		close(g_trace_handle_fd);
+	if (g_enabled_tag_fd > FD_INITIAL_VALUE)
+		close(g_enabled_tag_fd);
+	return;
+}
+
 
 static uint64_t traceInit()
 {

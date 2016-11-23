@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#define DEVICE_TYPE_TIZEN		//build atrace for tizen platform
-
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -27,7 +25,6 @@
 #include <time.h>
 #include <zlib.h>
 
-#ifdef DEVICE_TYPE_TIZEN
 #include <stdint.h>
 #include <strings.h>
 #include <string.h>
@@ -44,18 +41,6 @@
 #define BACKUP_TRACE	"/tmp/trace.backup"
 #define BOOTUP_TRACE	"/etc/ttrace.conf"
 #define DEF_GR_SIZE	1024
-#else
-#include <binder/IBinder.h>
-#include <binder/IServiceManager.h>
-#include <binder/Parcel.h>
-
-#include <cutils/properties.h>
-
-#include <utils/String8.h>
-#include <utils/Trace.h>
-
-using namespace android;
-#endif
 #define NELEM(x) ((int) (sizeof(x) / sizeof((x)[0])))
 
 enum { MAX_SYS_FILES = 8 };
@@ -131,7 +116,6 @@ struct TracingCategory {
 
 /* Tracing categories */
 static const TracingCategory k_categories[] = {
-#ifdef DEVICE_TYPE_TIZEN
     { "none",        "None",                TTRACE_TAG_NONE, { } }, //do not change "none" option's index
     { "gfx",         "Graphics",            TTRACE_TAG_GRAPHICS, { } },
     { "input",       "Input",               TTRACE_TAG_INPUT, { } },
@@ -149,21 +133,6 @@ static const TracingCategory k_categories[] = {
     { "scmirroring", "Screen mirroring",    TTRACE_TAG_SCREEN_MIRRORING, { } },
     { "efl",         "EFL",                 TTRACE_TAG_EFL, { } },
     { "app",         "Application",         TTRACE_TAG_APP, { } },
-#else		// Android tags
-    { "gfx",        "Graphics",         ATRACE_TAG_GRAPHICS, { } },
-    { "input",      "Input",            ATRACE_TAG_INPUT, { } },
-    { "view",       "View System",      ATRACE_TAG_VIEW, { } },
-    { "webview",    "WebView",          ATRACE_TAG_WEBVIEW, { } },
-    { "wm",         "Window Manager",   ATRACE_TAG_WINDOW_MANAGER, { } },
-    { "am",         "Activity Manager", ATRACE_TAG_ACTIVITY_MANAGER, { } },
-    { "audio",      "Audio",            ATRACE_TAG_AUDIO, { } },
-    { "video",      "Video",            ATRACE_TAG_VIDEO, { } },
-    { "camera",     "Camera",           ATRACE_TAG_CAMERA, { } },
-    { "hal",        "Hardware Modules", ATRACE_TAG_HAL, { } },
-    { "res",        "Resource Loading", ATRACE_TAG_RESOURCES, { } },
-    { "dalvik",     "Dalvik VM",        ATRACE_TAG_DALVIK, { } },
-    { "rs",         "RenderScript",     ATRACE_TAG_RS, { } },
-#endif	// Linux kernel tags
     { "sched",      "CPU Scheduling",   0, {
         { REQ,      "/sys/kernel/debug/tracing/events/sched/sched_switch/enable" },
         { REQ,      "/sys/kernel/debug/tracing/events/sched/sched_wakeup/enable" },
@@ -218,7 +187,6 @@ static const char* g_debugAppCmdLine = "";
 static bool g_traceAborted = false;
 static bool g_categoryEnables[NELEM(k_categories)] = {};
 
-#ifdef DEVICE_TYPE_TIZEN
 static bool g_init_exec = false;
 static bool g_append_trace = false;
 static bool g_backup_trace = false;
@@ -232,8 +200,6 @@ static struct group* group_ptr;
 
 /* Save excluded tags list */
 uint64_t excludedTags;
-
-#endif
 
 /* Sys file paths */
 static const char* k_traceClockPath =
@@ -441,7 +407,7 @@ static bool setTracingEnabled(bool enable)
 }
 
 // Clear the contents of the kernel trace.
-static bool clearTrace()
+static bool clearKernelTrace()
 {
     return truncateFile(k_tracePath);
 }
@@ -472,40 +438,10 @@ static bool setPrintTgidEnableIfPresent(bool enable)
     return true;
 }
 
-// Poke all the binder-enabled processes in the system to get them to re-read
-// their system properties.
-static bool pokeBinderServices()
-{
-#ifndef DEVICE_TYPE_TIZEN
-    sp<IServiceManager> sm = defaultServiceManager();
-    Vector<String16> services = sm->listServices();
-    for (size_t i = 0; i < services.size(); i++) {
-        sp<IBinder> obj = sm->checkService(services[i]);
-        if (obj != NULL) {
-            Parcel data;
-            if (obj->transact(IBinder::SYSPROPS_TRANSACTION, data,
-                    NULL, 0) != OK) {
-                if (false) {
-                    // XXX: For some reason this fails on tablets trying to
-                    // poke the "phone" service.  It's not clear whether some
-                    // are expected to fail.
-                    String8 svc(services[i]);
-                    fprintf(stderr, "error poking binder service %s\n",
-                        svc.string());
-                    return false;
-                }
-            }
-        }
-    }
-#endif
-    return true;
-}
-
 // Set the trace tags that userland tracing uses, and poke the running
 // processes to pick up the new value.
 static bool setTagsProperty(uint64_t tags)
 {
-#ifdef DEVICE_TYPE_TIZEN
 	uint64_t *sm_for_enabled_tag = NULL;
 	int fd = -1;
 	const CommonNode &tag_node = commonNodes[TTRACE_TAG_IDX];
@@ -635,27 +571,6 @@ static bool setTagsProperty(uint64_t tags)
 	//
 	munmap(sm_for_enabled_tag, sizeof(uint64_t));
 	close(fd);
-#else
-    char buf[64];
-    snprintf(buf, 64, "%#llx", tags);
-    if (property_set(k_traceTagsProperty, buf) < 0) {
-        fprintf(stderr, "error setting trace tags system property\n");
-        return false;
-    }
-#endif
-    return true;
-}
-
-// Set the system property that indicates which apps should perform
-// application-level tracing.
-static bool setAppCmdlineProperty(const char* cmdline)
-{
-#ifndef DEVICE_TYPE_TIZEN
-    if (property_set(k_traceAppCmdlineProperty, cmdline) < 0) {
-        fprintf(stderr, "error setting trace app system property\n");
-        return false;
-    }
-#endif
     return true;
 }
 
@@ -672,52 +587,6 @@ static bool disableKernelTraceEvents() {
         }
     }
     return ok;
-}
-
-// Verify that the comma separated list of functions are being traced by the
-// kernel.
-static bool verifyKernelTraceFuncs(const char* funcs)
-{
-#ifndef DEVICE_TYPE_TIZEN
-    int fd = open(k_ftraceFilterPath, O_RDONLY);
-    if (fd == -1) {
-        fprintf(stderr, "error opening %s: %s (%d)\n", k_ftraceFilterPath,
-            strerror_r(errno, str_error, sizeof(str_error)), errno);
-        return false;
-    }
-
-    char buf[4097];
-    ssize_t n = read(fd, buf, 4096);
-    close(fd);
-    if (n == -1) {
-        fprintf(stderr, "error reading %s: %s (%d)\n", k_ftraceFilterPath,
-            strerror_r(errno, str_error, sizeof(str_error)), errno);
-        return false;
-    }
-
-    buf[n] = '\0';
-    String8 funcList = String8::format("\n%s", buf);
-
-    // Make sure that every function listed in funcs is in the list we just
-    // read from the kernel.
-    bool ok = true;
-    char* myFuncs = strdup(funcs);
-    char* func = strtok(myFuncs, ",");
-    while (func) {
-        String8 fancyFunc = String8::format("\n%s\n", func);
-        bool found = funcList.find(fancyFunc.string(), 0) >= 0;
-        if (!found || func[0] == '\0') {
-            fprintf(stderr, "error: \"%s\" is not a valid kernel function "
-                "to trace.\n", func);
-            ok = false;
-        }
-        func = strtok(NULL, ",");
-    }
-    free(myFuncs);
-	return ok;
-#else
-    return true;
-#endif
 }
 
 // Set the comma separated list of functions that the kernel is to trace.
@@ -752,11 +621,6 @@ static bool setKernelTraceFuncs(const char* funcs)
             func = strtok_r(NULL, ",", &ptr[1]);
         }
         free(myFuncs);
-
-        // Verify that the set functions are being traced.
-        if (ok) {
-            ok &= verifyKernelTraceFuncs(funcs);
-        }
     }
 
     return ok;
@@ -776,25 +640,17 @@ static bool setUpTrace()
 
     // Set up the tracing options.
     ok &= setTraceOverwriteEnable(g_traceOverwrite);
-#ifdef DEVICE_TYPE_TIZEN
     if(!g_append_trace) {
     	ok &= setTraceBufferSizeKB(g_traceBufferSizeKB);
 	ok &= setGlobalClockEnable(true);
         ok &= setKernelTraceFuncs(g_kernelTraceFuncs);
     }
-#else
-    ok &= setTraceBufferSizeKB(g_traceBufferSizeKB);
-    ok &= setGlobalClockEnable(true);
-    ok &= setKernelTraceFuncs(g_kernelTraceFuncs);
-#endif
     ok &= setPrintTgidEnableIfPresent(true);
 
     // Set up the tags property.
     uint64_t tags = 0;
-#ifdef DEVICE_TYPE_TIZEN
     if (g_categoryEnables[TAG_NONE_IDX]) tags = TTRACE_TAG_NEVER;
     else {
-#endif
 	for (int i = 0; i < NELEM(k_categories); i++) {
 	    if (g_categoryEnables[i]) {
 		const TracingCategory &c = k_categories[i];
@@ -802,7 +658,6 @@ static bool setUpTrace()
 		    tags |= c.tags;
 	    }
 	}
-#ifdef DEVICE_TYPE_TIZEN
 	if (tags == 0 && excludedTags == 0) {
 	    tags |= TTRACE_TAG_ALWAYS;
 	}
@@ -816,21 +671,17 @@ static bool setUpTrace()
 	}
 	printf("Tags: 0x%llx, excludedTags: 0x%llx\n", tags, excludedTags);
     }
-    ok &= startTrace();
-	if(!g_append_trace) {
-		// For debug
-		// printf("\nclear the trace\n");
-		//
-	    ok &= clearTrace();
-	}
-#endif
-    ok &= setTagsProperty(tags);
-    ok &= setAppCmdlineProperty(g_debugAppCmdLine);
-    ok &= pokeBinderServices();
 
-    // Disable all the sysfs enables.  This is done as a separate loop from
-    // the enables to allow the same enable to exist in multiple categories.
-    ok &= disableKernelTraceEvents();
+    ok &= startTrace();
+    if(!g_append_trace) {
+        // Clear Kernel Trace
+        ok &= clearKernelTrace();
+
+        // Disable all the sysfs enables.  This is done as a separate loop from
+        // the enables to allow the same enable to exist in multiple categories.
+        ok &= disableKernelTraceEvents();
+    }
+    ok &= setTagsProperty(tags);
 
     // Enable all the sysfs enables that are in an enabled category.
     for (int i = 0; i < NELEM(k_categories); i++) {
@@ -860,13 +711,6 @@ static void cleanUpTrace()
     // Disable all tracing that we're able to.
     disableKernelTraceEvents();
 
-    // Reset the system properties.
-#ifndef DEVICE_TYPE_TIZEN
-    setTagsProperty(0);
-#endif
-    setAppCmdlineProperty("");
-    pokeBinderServices();
-
     // Set the options back to their defaults.
     setTraceOverwriteEnable(true);
     setTraceBufferSizeKB(1);
@@ -878,14 +722,11 @@ static void cleanUpTrace()
 // Disable tracing in the kernel.
 static void stopTrace()
 {
-#ifdef DEVICE_TYPE_TIZEN
     setTagsProperty(0);
-#endif
     setTracingEnabled(false);
 }
 
 // Read the current kernel trace and write it to stdout.
-#ifdef DEVICE_TYPE_TIZEN
 static void dumpTrace(bool startup)
 {	
     int backup_fd = -1;
@@ -903,18 +744,11 @@ static void dumpTrace(bool startup)
     	}
     }
 
-#else
-static void dumpTrace()
-{
-    int traceFD = open(k_tracePath, O_RDWR);
-#endif
     if (traceFD == -1) {
         fprintf(stderr, "error opening %s: %s (%d)\n", k_tracePath,
                 strerror_r(errno, str_error, sizeof(str_error)), errno);
-#ifdef DEVICE_TYPE_TIZEN
         if (backup_fd > -1)
    		close(backup_fd);
-#endif
         return;
     }
 
@@ -928,10 +762,8 @@ static void dumpTrace()
         if (result != Z_OK) {
             fprintf(stderr, "error initializing zlib: %d\n", result);
             close(traceFD);
-#ifdef DEVICE_TYPE_TIZEN
             if (backup_fd > -1)
 		close(backup_fd);
-#endif
             return;
         }
 
@@ -945,10 +777,8 @@ static void dumpTrace()
 					if (out != NULL)
 							free(out);
         	close(traceFD);
-#ifdef DEVICE_TYPE_TIZEN
         	if (backup_fd > -1)
         			close(backup_fd);
-#endif
         	return;
 				}
         flush = Z_NO_FLUSH;
@@ -976,12 +806,8 @@ static void dumpTrace()
 
             if (zs.avail_out == 0) {
                 // Need to write the output.
-#ifdef DEVICE_TYPE_TIZEN
 		if(startup)	result = write(backup_fd, out, bufSize);
 		else 		result = write(STDOUT_FILENO, out, bufSize);
-#else
-                result = write(STDOUT_FILENO, out, bufSize);
-#endif
                 if ((size_t)result < bufSize) {
                     fprintf(stderr, "error writing deflated trace: %s (%d)\n",
                             strerror_r(errno, str_error, sizeof(str_error)), errno);
@@ -1001,12 +827,8 @@ static void dumpTrace()
 
         if (zs.avail_out < bufSize) {
             size_t bytes = bufSize - zs.avail_out;
-#ifdef DEVICE_TYPE_TIZEN
     	    if(startup)		result = write(backup_fd, out, bytes);
 	    else 		result = write(STDOUT_FILENO, out, bytes);
-#else
-            result = write(STDOUT_FILENO, out, bytes);
-#endif
             if ((size_t)result < bytes) {
                 fprintf(stderr, "error writing deflated trace: %s (%d)\n",
                         strerror_r(errno, str_error, sizeof(str_error)), errno);
@@ -1022,24 +844,18 @@ static void dumpTrace()
         free(out);
     } else {
 		ssize_t sent = 0;
-#ifdef DEVICE_TYPE_TIZEN 
 		if (startup) 
 			while ((sent = sendfile(backup_fd, traceFD, NULL, 64*1024*1024)) > 0);
 		else 
 			while ((sent = sendfile(STDOUT_FILENO, traceFD, NULL, 64*1024*1024)) > 0);
-#else
-		while ((sent = sendfile(STDOUT_FILENO, traceFD, NULL, 64*1024*1024)) > 0);
-#endif
 		if (sent == -1) {
 			fprintf(stderr, "error dumping trace: %s (%d)\n", strerror_r(errno, str_error, sizeof(str_error)),
 					errno);
 		}
     }
 
-#ifdef DEVICE_TYPE_TIZEN
 	if (backup_fd > -1)
 		close(backup_fd);
-#endif
     close(traceFD);
 }
 
@@ -1089,9 +905,7 @@ static bool setCategoryEnable(const char* name, bool enable)
 static void listSupportedCategories()
 {
     for (int i = 0; i < NELEM(k_categories); i++) {
-#ifdef DEVICE_TYPE_TIZEN
         if(i==TAG_NONE_IDX) continue;
-#endif
         const TracingCategory& c = k_categories[i];
         if (isCategorySupported(c)) {
             printf("  %10s - %s\n", c.name, c.longname);
@@ -1104,10 +918,6 @@ static void showHelp(const char *cmd)
 {
     fprintf(stderr, "usage: %s [options] [categories...]\n", cmd);
     fprintf(stderr, "options include:\n"
-#ifndef DEVICE_TYPE_TIZEN
-                    "  -a appname      enable app-level tracing for a comma "
-                        "separated list of cmdlines\n"
-#endif
                     "  -b N            use a trace buffer size of N KB\n"
                     "  -c              trace into a circular buffer\n"
                     "  -e category     specify a category to exclude [default None]\n"
@@ -1121,10 +931,8 @@ static void showHelp(const char *cmd)
                     "  --async_dump    dump the current contents of circular trace buffer\n"
                     "  --async_stop    stop tracing and dump the current contents of circular\n"
                     "                    trace buffer\n"
-#ifdef DEVICE_TYPE_TIZEN
-                    "  --append        append traces to the existing traces. do not clear the trace buffer\n"
+                    "  --append        append traces to the existing traces. do not clear the trace buffer\n and kernel trace events set"
 		    "  --backup        back up the existing traces to /tmp/trace.backup and then clear the trace buffer\n"
-#endif
                     "  --list_categories\n"
                     "                  list the available tracing categories\n"
             );
@@ -1151,20 +959,13 @@ int main(int argc, char **argv)
             {"async_stop",      no_argument, 0,  0 },
             {"async_dump",      no_argument, 0,  0 },
             {"list_categories", no_argument, 0,  0 },
-#ifdef DEVICE_TYPE_TIZEN
             {"init_exec",	no_argument, 0,  0 },
             {"append",		no_argument, 0,  0 },
             {"backup",    	no_argument, 0,  0 },
-#endif
             {           0,                0, 0,  0 }
         };
-#ifndef DEVICE_TYPE_TIZEN
-        ret = getopt_long(argc, argv, "a:b:ck:ns:t:z:p",
-                          long_options, &option_index);
-#else
 	ret = getopt_long(argc, argv, "b:ck:e:ns:t:z",
 			long_options, &option_index);
-#endif
         if (ret < 0) {
             for (int i = optind; i < argc; i++) {
                 if (!setCategoryEnable(argv[i], true)) {
@@ -1219,7 +1020,6 @@ int main(int argc, char **argv)
             break;
 
             case 0:
-#ifdef DEVICE_TYPE_TIZEN
 		if (!strcmp(long_options[option_index].name, "list_categories")) {
                     listSupportedCategories();
                     exit(0);
@@ -1250,9 +1050,6 @@ int main(int argc, char **argv)
 		} else if (!strcmp(long_options[option_index].name, "backup")) {
                     g_backup_trace = true;
 		}
-#else
-            case 0:
-#endif
             break;
 
             default:
@@ -1270,19 +1067,14 @@ int main(int argc, char **argv)
     }
 
     bool ok = true;
-#ifdef DEVICE_TYPE_TIZEN
     if(traceStart && g_backup_trace) {
 //before start tracing by atrace, backup existig traces
 		stopTrace();
     	dumpTrace(true);
     }
-#endif
     if (!(async && !g_traceOverwrite)) {
 	    ok &= setUpTrace();
     }
-#ifndef DEVICE_TYPE_TIZEN
-    ok &= startTrace();
-#endif
     if (ok && traceStart) {
     	// For debug
         // printf("capturing trace...");
@@ -1294,14 +1086,6 @@ int main(int argc, char **argv)
         // contain entries from only one CPU can cause "begin" entries without a
         // matching "end" entry to show up if a task gets migrated from one CPU to
         // another.
-#ifndef DEVICE_TYPE_TIZEN
-		if(!g_append_trace) {
-		// For debug
-		// printf("\nclear the trace\n");
-		//
-	        ok = clearTrace();
-		}
-#endif
         if (ok && !async) {
             // Sleep to allow the trace to be captured.
             struct timespec timeLeft;
@@ -1323,16 +1107,12 @@ int main(int argc, char **argv)
         if (!g_traceAborted) {
             printf(" done\nTRACE:\n");
             fflush(stdout);
-#ifdef DEVICE_TYPE_TIZEN
 	    	dumpTrace(false);
-#else
-            dumpTrace();
-#endif
         } else {
             printf("\ntrace aborted.\n");
             fflush(stdout);
         }
-        clearTrace();
+        clearKernelTrace();
     } else if (!ok) {
         fprintf(stderr, "unable to start tracing\n");
     }
