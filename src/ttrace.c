@@ -155,7 +155,7 @@ void traceBegin(uint64_t tag, const char *name, ...)
 		TTRACE_LOG("traceBegin:: write >> tag: %u tag_bit: %u", tag, *cur_enabled_tag);
 
 		va_start(ap, name);
-		snprintf(buf, MAX_HEAD_LEN, "B|%5d|", getpid());
+		snprintf(buf, MAX_LEN, "B|%5d|", getpid());
 		len += vsnprintf(buf + MAX_HEAD_LEN, POS_LABEL_ST, name, ap);
 		va_end(ap);
 
