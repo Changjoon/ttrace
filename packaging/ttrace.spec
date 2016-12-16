@@ -50,6 +50,8 @@ T-trace library devel
 %setup -q
 
 %build
+export CFLAGS=$( echo $CFLAGS | sed -e "s/-flto//g")
+export CXXFLAGS=$( echo $CXXFLAGS | sed -e "s/-flto//g")
 export CFLAGS="$CFLAGS -g -Wall -std=gnu99"
 export CXXFLAGS="$CXXFLAGS -std=c++0x -fPIE -pie"
 %cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix} -DLIBDIR=%{_libdir} -DINCLUDEDIR=%{_includedir} \
