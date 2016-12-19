@@ -51,7 +51,7 @@ T-trace library devel
 
 %build
 export CFLAGS="$CFLAGS -g -Wall -std=gnu99"
-export CXXFLAGS="$CXXFLAGS -std=c++0x -fPIE -pie"
+export CXXFLAGS="$CXXFLAGS -std=c++0x -fPIE -pie -fno-exceptions"
 %cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix} -DLIBDIR=%{_libdir} -DINCLUDEDIR=%{_includedir} \
       -DTTRACE_PROFILE=%{TTRACE_PROFILE} -DTTRACE_TIZEN_VERSION_MAJOR=%{TTRACE_TIZEN_VERSION_MAJOR}
 make %{?jobs:-j%jobs}
