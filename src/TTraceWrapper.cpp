@@ -23,11 +23,12 @@ TTraceWrapper::TTraceWrapper(uint64_t tags, const char* label, ...) {
 	char fmtd_label[MAX_LEN];
 
 	tag = tags;
+
 	va_start(ap, label);
-	vsnprintf(fmtd_label, MAX_LEN, label, ap);
-	
-	traceBegin(tag, fmtd_label);
+	vsnprintf(fmtd_label, MAX_LEN-8, label, ap);
+	traceBegin(tag, "%s", fmtd_label);
 	va_end(ap);
+
 }
 
 TTraceWrapper::~TTraceWrapper() {
