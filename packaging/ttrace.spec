@@ -31,7 +31,7 @@ BuildRequires: cmake
 %endif
 
 %define TTRACE_TIZEN_VERSION_MAJOR 2
-%if "%{?tizen_version_major}" == "3"
+%if 0%{?tizen_version_major} >= 3
 %define TTRACE_TIZEN_VERSION_MAJOR 3
 %endif
 
