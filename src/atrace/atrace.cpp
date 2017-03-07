@@ -33,7 +33,6 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/smack.h>
-#include <linux/xattr.h>
 #include <unistd.h>
 #include "ttrace.h"
 #define TTRACE_TAG_NONE		9999
@@ -52,46 +51,6 @@ const char* k_traceAppCmdlineProperty = "debug.atrace.app_cmdlines";
 typedef enum { OPT, REQ } requiredness  ;
 
 char str_error[256] = "";
-
-struct CommonNode {
-	const char* path;
-	const mode_t	perms;
-};
-
-typedef enum {
-	TTRACE_TAG_IDX = 0,
-	DEBUG_FS_IDX,
-	TRACING_FS_IDX,
-	TRACE_MARKER_IDX,
-	ESSENCE_NODE_IDX
-} commonNodeIdx;
-
-static const CommonNode commonNodes[] = {
-	{	ENABLED_TAG_FILE,		0664	},
-	{	"/sys/kernel/debug",							0755	},
-	{	"/sys/kernel/debug/tracing",					0755	},
-	{	"/sys/kernel/debug/tracing/trace_marker",		0222	},
-	{	"/sys/kernel/debug/tracing/trace_clock",		0666	},
-	{	"/sys/kernel/debug/tracing/buffer_size_kb",		0666	},
-	{	"/sys/kernel/debug/tracing/current_tracer",		0666	},
-	{	"/sys/kernel/debug/tracing/tracing_on",			0666	},
-	{	"/sys/kernel/debug/tracing/trace",				0666	},
-	{	"/sys/kernel/debug/tracing/options/overwrite",	0666	},
-	{	"/sys/kernel/debug/tracing/options/print-tgid",	0666	},
-    {	"/sys/kernel/debug/tracing/events/sched/sched_switch/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/sched/sched_wakeup/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/power/cpu_frequency/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/memory_bus/enable",			0666 },
-    {	"/sys/kernel/debug/tracing/events/power/cpu_idle/enable",		0666 },
-    {	"/sys/kernel/debug/tracing/events/ext4/ext4_sync_file_enter/enable",	0666	},
-    {	"/sys/kernel/debug/tracing/events/ext4/ext4_sync_file_exit/enable",		0666	},
-    {	"/sys/kernel/debug/tracing/events/block/block_rq_issue/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/block/block_rq_complete/enable",	0666	},
-    {	"/sys/kernel/debug/tracing/events/mmc/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/cpufreq_interactive/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/sync/enable",	0666 },
-    {	"/sys/kernel/debug/tracing/events/workqueue/enable",	0666 },
-};
 
 struct TracingCategory {
     // The name identifying the category.
@@ -250,39 +209,6 @@ static bool fileExists(const char* filename) {
 // Check whether a file is writable.
 static bool fileIsWritable(const char* filename) {
     return access(filename, W_OK) != -1;
-}
-
-static bool setFilePermission (const char *path, const mode_t perms) {
-	//fprintf(stderr, "path: %s, perms: %d, gid: %d\n", path,perms, group_dev.gr_gid);
-	if (0 > chown(path, 0, group_dev.gr_gid)) return false;
-	if (0 > chmod(path, perms)) return false;
-	if (0 > smack_set_label_for_path(path, XATTR_NAME_SMACK, false, "*")) return false;
-
-	return true;
-}
-
-static bool initSysfsPermission() {
-	for (int i = TTRACE_TAG_IDX + 1 ; i < NELEM(commonNodes); i++) {
-		const CommonNode &node = commonNodes[i];
-		printf("initsysfsperm: path- %s, perms- %d\n", node.path, node.perms);
-		if (fileExists(node.path)) {
-			if (i == DEBUG_FS_IDX || i == TRACING_FS_IDX) {
-				if(0 > chmod(node.path, node.perms))
-					return false;
-			}
-			else {
-				if (!setFilePermission(node.path, node.perms))
-					return false;
-			}
-		}
-		else {
-			if(i < ESSENCE_NODE_IDX)
-			{
-				return false;
-			}
-		}
-	}
-    return true;
 }
 
 // Truncate a file.
@@ -445,7 +371,6 @@ static bool setTagsProperty(uint64_t tags)
 {
 	uint64_t *sm_for_enabled_tag = NULL;
 	int fd = -1;
-	const CommonNode &tag_node = commonNodes[TTRACE_TAG_IDX];
 
 //atrace "--init_exec" mode
 	if(g_init_exec) {
@@ -494,13 +419,6 @@ static bool setTagsProperty(uint64_t tags)
 			fprintf(stderr, "Fail to open enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
 			return false;
 		}
-		//set file permission, smack label to "/tmp/tmp_tag" and then change it's name to "/tmp/ttrace_tag"
-		if (!setFilePermission("/tmp/tmp_tag", tag_node.perms))
-		{
-			fprintf(stderr, "setFilePermission failed(%s): /tmp/tmp_tag\n", strerror_r(errno, str_error, sizeof(str_error)));
-			close(fd);
-			return false;
-		}
 
 		if (ftruncate(fd, sizeof(uint64_t)) < 0) {
 			fprintf(stderr, "ftruncate() failed(%s)\n", strerror_r(errno, str_error, sizeof(str_error)));
@@ -516,15 +434,9 @@ static bool setTagsProperty(uint64_t tags)
 		}
 		//for auto-mounting tracingfs (>= linux 4.1.x)
 		system("/usr/bin/ls -al /sys/kernel/debug/tracing > /dev/null 2>&1");
-		if(!initSysfsPermission()) {
-			fprintf(stderr, "Fail to init sysfs permisions: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
-			munmap(sm_for_enabled_tag, sizeof(uint64_t));
-			close(fd);
-			return false;
-		}
 
 		memset(sm_for_enabled_tag, 0, sizeof(uint64_t));
-		if(-1 == rename("/tmp/tmp_tag", tag_node.path)) {
+		if(-1 == rename("/tmp/tmp_tag", ENABLED_TAG_FILE)) {
 			fprintf(stderr, "Fail to rename enabled_tag file: %s(%d)\n", strerror_r(errno, str_error, sizeof(str_error)), errno);
 		}
 

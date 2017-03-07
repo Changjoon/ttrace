@@ -5,6 +5,7 @@ Release:    1
 Group:      System/Libraries
 License:    Apache-2.0
 Source0:    %{name}-%{version}.tar.gz
+SOURCE100:	packaging/ttrace.conf
 SOURCE102:	packaging/ttrace-marker.service
 SOURCE103:	packaging/atrace-bootup.sh
 
@@ -59,8 +60,10 @@ make %{?jobs:-j%jobs}
 %install
 rm -rf %{buildroot}
 %make_install
+mkdir -p %{buildroot}/usr/lib/tmpfiles.d
 install -d %{buildroot}%{_unitdir}/ttrace-marker.service.wants
-install -m0644 %{SOURCE102} %{buildroot}%{_unitdir}
+install -m 0644 %{SOURCE100} %{buildroot}/usr/lib/tmpfiles.d/ttrace.conf
+install -m 0644 %{SOURCE102} %{buildroot}%{_unitdir}
 mkdir -p %{buildroot}%{_bindir}
 cp %{SOURCE103} %{buildroot}%{_bindir}
 mkdir -p %{buildroot}/usr/share/license
@@ -82,6 +85,7 @@ cp LICENSE %{buildroot}/usr/share/license/%{name}
 %{_unitdir}/sys-kernel-debug.mount.wants/ttrace-marker.service
 %attr(755,root,root) %{_bindir}/atrace-bootup.sh
 /usr/share/license/%{name}
+/usr/lib/tmpfiles.d/ttrace.conf
 
 %files devel
 %defattr(-,root,root,-)
